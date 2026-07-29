@@ -1,10 +1,36 @@
 {
   "testnet": {
-    "configuration": "C_CONFIG_MOCK_ADDRESS",
-    "oracle": "C_ORACLE_MOCK_ADDRESS",
-    "interest_rate_model": "C_INTEREST_MOCK_ADDRESS",
-    "treasury": "C_TREASURY_MOCK_ADDRESS",
-    "lending_pool": "C_POOL_MOCK_ADDRESS",
-    "liquidation_engine": "C_LIQ_MOCK_ADDRESS"
+    "configuration": "CC3P2CRXZP4EQXKQ2RTU3ZKD4SKE6LG5PW26TJC6ZMMFOIQ7WUO3S3FK",
+    "oracle": "CD4HRMQGXNOO4CDB4J7PQYI5MTFQNA2TGIMRMFUHP5Q3PH7T2EB6SUTT",
+    "interest_rate_model": "CA7QVKZN7YYVQ4XWYRSJKRN4FODGGLJ4P4ZYXKHOMQTJ3DM4HRGWQT3Q",
+    "treasury": "CARFUMHTTKBZCMXMZDTFBHTIFILAMUHDCXHQQLZEWL6BIU556GIBWWN5",
+    "lending_pool": "CD6KIVR7Q57W37SWE3MX3T5LVX7LXGF7ES2GRKSVFPBHR3MUWYZE4QDK",
+    "liquidation_engine": "CBQDUJ5NW6CIIXDDY4OEQAVTQ3B5AXV6XNTM7DV6HI3U3YUS6X34KW54",
+    "assets": {
+      "XLM": {
+        "symbol": "XLM",
+        "assetAddress": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+        "decimals": 7,
+        "kind": "native-sac",
+        "note": "Built-in Stellar Asset Contract wrapping native XLM"
+      },
+      "USDC": {
+        "symbol": "USDC",
+        "assetAddress": "CDJFQRJTO635XVKTP47RLVXCAX65TTC2MKSBTCY4PZUN7EMQVSZFDWN3",
+        "decimals": 7,
+        "kind": "classic-asset-sac",
+        "issuer": "GA3HX2NBHUGBP7SSXJ4BIS52LUXHGVHO3FGTYAAWWZQNLZSOSJTHEKKU",
+        "note": "Testnet classic asset USDC:issuer wrapped via `stellar contract asset deploy`"
+      },
+      "AQUA": {
+        "symbol": "AQUA",
+        "assetAddress": "CAMX57BZJYA6PZ5BMIYCTBJ7TCQWUGDKOM7SCLXM5EBOS2SAF67IP5X4",
+        "decimals": 7,
+        "kind": "classic-asset-sac",
+        "issuer": "GDVFA5Y32WGDJLHLDICJDSXTTM77V57YO655T66VXQL6BQUYHPMLVS66",
+        "note": "Testnet classic asset AQUA:issuer wrapped via `stellar contract asset deploy`"
+      }
+    },
+    "deployer": "GAEBRGUKTUXURQDGW6FUNNW6DDPW436QGLHSLJWNQOMFOGBLHFDTCKFK"
   }
 }
