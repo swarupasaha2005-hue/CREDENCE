@@ -1,0 +1,10 @@
+{
+  "testnet": {
+    "configuration": "C_CONFIG_MOCK_ADDRESS",
+    "oracle": "C_ORACLE_MOCK_ADDRESS",
+    "interest_rate_model": "C_INTEREST_MOCK_ADDRESS",
+    "treasury": "C_TREASURY_MOCK_ADDRESS",
+    "lending_pool": "C_POOL_MOCK_ADDRESS",
+    "liquidation_engine": "C_LIQ_MOCK_ADDRESS"
+  }
+}
