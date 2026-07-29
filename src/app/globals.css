@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: #6D63FF;
+  --color-primary-hover: #7A72FF;
+  --color-dark: #17152F;
+  --color-text-primary: #17152F;
+  --color-text-secondary: #666666;
+  --color-border: #ECECEC;
+  --color-card: #FFFFFF;
+  --color-success: #22C55E;
+
+  /* Markets page tokens (namespaced to avoid touching Dashboard/landing tokens) */
+  --color-market-surface: #0D0D0D;
+  --color-market-surface-hover: #171717;
+  --color-market-text: #FAFAFA;
+  --color-market-text-secondary: #B7B7B7;
+  --color-market-text-muted: #7A7A7A;
+  --color-market-border: rgba(255, 255, 255, 0.08);
+
+  --font-sans: var(--font-inter), sans-serif;
+  --font-serif: var(--font-instrument-serif), serif;
+}
+
+@layer base {
+  :root {
+    --background: #050505;
+    --foreground: #FAFAFA;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism utility for floating cards */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
