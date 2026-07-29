@@ -1,3 +1,5 @@
+import { Client as ContractClient } from "@stellar/stellar-sdk/contract";
+import { signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
 import {
   UserPosition,
   RiskParameters,
@@ -5,218 +7,487 @@ import {
   MarketData,
   SupplyPosition,
   BorrowPosition,
-  BorrowSnapshot
+  BorrowSnapshot,
 } from "../../interfaces/src";
 
-const MOCK_MARKETS: MarketData[] = [
-  {
-    symbol: "XLM",
-    name: "Stellar Lumens",
-    assetAddress: "native",
-    iconUrl: "/assets/tokens/xlm.svg",
-    priceUsd: 0.112,
-    decimals: 7,
-    totalSupplied: 5_200_000n,
-    totalBorrowed: 1_040_000n,
-    availableLiquidity: 4_160_000n,
-    supplyApyBps: 320,
-    borrowApyBps: 610,
-    utilizationBps: 2000,
-    collateralEnabled: true,
-    ltvBps: 7000,
-    liquidationThresholdBps: 7500,
+// WAD fixed-point precision used throughout the Rust contracts (1e18).
+const WAD = 1_000_000_000_000_000_000n;
+
+const NETWORK_CONFIG: Record<string, { rpcUrl: string; networkPassphrase: string }> = {
+  testnet: {
+    rpcUrl: "https://soroban-testnet.stellar.org",
+    networkPassphrase: "Test SDF Network ; September 2015",
   },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    assetAddress: "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-    iconUrl: "/assets/tokens/usdc.svg",
-    priceUsd: 1.0,
-    decimals: 6,
-    totalSupplied: 3_800_000n,
-    totalBorrowed: 2_850_000n,
-    availableLiquidity: 950_000n,
-    supplyApyBps: 480,
-    borrowApyBps: 890,
-    utilizationBps: 7500,
-    collateralEnabled: true,
-    ltvBps: 8500,
-    liquidationThresholdBps: 9000,
+  futurenet: {
+    rpcUrl: "https://rpc-futurenet.stellar.org",
+    networkPassphrase: "Test SDF Future Network ; October 2022",
   },
-  {
-    symbol: "AQUA",
-    name: "Aquarius",
-    assetAddress: "AQUA:GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA",
-    iconUrl: "/assets/tokens/aqua.svg",
-    priceUsd: 0.0043,
-    decimals: 7,
-    totalSupplied: 890_000n,
-    totalBorrowed: 120_000n,
-    availableLiquidity: 770_000n,
-    supplyApyBps: 150,
-    borrowApyBps: 420,
-    utilizationBps: 1350,
-    collateralEnabled: false,
-    ltvBps: 0,
-    liquidationThresholdBps: 0,
-  },
-];
+};
+
+/** Static display metadata that has no on-chain representation. */
+const ASSET_METADATA: Record<string, { name: string; iconUrl: string; collateralEnabled: boolean }> = {
+  XLM: { name: "Stellar Lumens", iconUrl: "/assets/tokens/xlm.svg", collateralEnabled: true },
+  USDC: { name: "USD Coin", iconUrl: "/assets/tokens/usdc.svg", collateralEnabled: true },
+  AQUA: { name: "Aquarius", iconUrl: "/assets/tokens/aqua.svg", collateralEnabled: false },
+};
+
+interface AssetEntry {
+  symbol: string;
+  assetAddress: string;
+  decimals: number;
+}
+
+type Registry = Record<string, string> & {
+  assets?: Record<string, { symbol: string; assetAddress: string; decimals: number }>;
+};
+
+function toNumber(scaled: bigint, decimals: number): number {
+  return Number(scaled) / 10 ** decimals;
+}
 
 /**
  * High-level SDK for interacting with the Credence Protocol.
- * Abstracts Soroban XDR formatting and contract calls for the frontend.
+ * Wraps the real Soroban contracts deployed on the configured network via
+ * the generic `@stellar/stellar-sdk/contract` Client (the same mechanism
+ * used by `stellar contract bindings typescript`), so every call below is a
+ * genuine RPC simulation / invocation against the live contracts recorded
+ * in `registry/deployments.json`.
  */
 export class CredenceProtocol {
-  private network: string;
-  private registry: Record<string, string>;
+  private registry: Registry;
+  private rpcUrl: string;
+  private networkPassphrase: string;
+  private assets: AssetEntry[];
+  private clientCache: Map<string, Promise<ContractClient>> = new Map();
 
   constructor(network: string, registry: Record<string, string>) {
-    this.network = network;
-    this.registry = registry;
+    this.registry = registry as Registry;
+
+    const cfg = NETWORK_CONFIG[network] ?? NETWORK_CONFIG.testnet;
+    this.rpcUrl = cfg.rpcUrl;
+    this.networkPassphrase = cfg.networkPassphrase;
+
+    const assetsMap = this.registry.assets ?? {};
+    this.assets = Object.values(assetsMap).map((a) => ({
+      symbol: a.symbol,
+      assetAddress: a.assetAddress,
+      decimals: a.decimals,
+    }));
   }
 
-  // Configuration
+  // --- Internal helpers ---------------------------------------------------
+
+  private async client(contractId: string, publicKey?: string): Promise<ContractClient> {
+    const cacheKey = `${contractId}:${publicKey ?? ""}`;
+    let pending = this.clientCache.get(cacheKey);
+    if (!pending) {
+      pending = ContractClient.from({
+        contractId,
+        rpcUrl: this.rpcUrl,
+        networkPassphrase: this.networkPassphrase,
+        publicKey,
+        allowHttp: this.rpcUrl.startsWith("http://"),
+      });
+      this.clientCache.set(cacheKey, pending);
+    }
+    return pending;
+  }
+
+  private async configClient(publicKey?: string) {
+    const addr = this.registry["configuration"];
+    if (!addr) throw new Error("Configuration contract not found in registry");
+    return this.client(addr, publicKey);
+  }
+
+  private async oracleClient(publicKey?: string) {
+    const addr = this.registry["oracle"];
+    if (!addr) throw new Error("Oracle contract not found in registry");
+    return this.client(addr, publicKey);
+  }
+
+  private async poolClient(publicKey?: string) {
+    const addr = this.registry["lending_pool"];
+    if (!addr) throw new Error("Lending pool not found in registry");
+    return this.client(addr, publicKey);
+  }
+
+  private async interestClient(publicKey?: string) {
+    const addr = this.registry["interest_rate_model"];
+    if (!addr) throw new Error("Interest rate model not found in registry");
+    return this.client(addr, publicKey);
+  }
+
+  private async liquidationClient(publicKey?: string) {
+    const addr = this.registry["liquidation_engine"];
+    if (!addr) throw new Error("Liquidation engine not found in registry");
+    return this.client(addr, publicKey);
+  }
+
+  private resolveAsset(symbolOrAddress: string): AssetEntry {
+    const bySymbol = this.assets.find(
+      (a) => a.symbol.toLowerCase() === symbolOrAddress.toLowerCase()
+    );
+    if (bySymbol) return bySymbol;
+
+    const byAddress = this.assets.find((a) => a.assetAddress === symbolOrAddress);
+    if (byAddress) return byAddress;
+
+    throw new Error(`Unknown asset: ${symbolOrAddress}`);
+  }
+
+  /** Simulates a read-only contract call and returns its typed result. */
+  private async readCall<T>(client: ContractClient, method: string, args?: Record<string, unknown>): Promise<T> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fn = (client as any)[method];
+    if (typeof fn !== "function") throw new Error(`Method ${method} not found on contract client`);
+    const tx = args !== undefined ? await fn(args) : await fn();
+    return tx.result as T;
+  }
+
+  /** Signs (via Freighter) and submits a write transaction, returning the tx hash. */
+  private async writeCall(
+    client: ContractClient,
+    method: string,
+    args: Record<string, unknown>,
+    signer: string
+  ): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fn = (client as any)[method];
+    if (typeof fn !== "function") throw new Error(`Method ${method} not found on contract client`);
+
+    const assembled = await fn(args, { simulate: true });
+    const sent = await assembled.signAndSend({
+      signTransaction: async (xdr: string, opts?: { networkPassphrase?: string }) => {
+        const { signedTxXdr, error } = await freighterSignTransaction(xdr, {
+          networkPassphrase: opts?.networkPassphrase ?? this.networkPassphrase,
+          address: signer,
+        });
+        if (error) throw new Error("Transaction signing was rejected");
+        return { signedTxXdr, signerAddress: signer };
+      },
+    });
+
+    return sent.sendTransactionResponse?.hash ?? sent.getTransactionResponse?.txHash ?? "";
+  }
+
+  private async getAssetPriceUsd(assetAddress: string): Promise<number> {
+    try {
+      const oracle = await this.oracleClient();
+      const price: bigint = await this.readCall(oracle, "get_price", { asset: assetAddress });
+      // Oracle price is WAD-scaled USD price (1e18 = $1.00).
+      return Number(price) / 1e18;
+    } catch {
+      return 0;
+    }
+  }
+
+  // --- Configuration -------------------------------------------------------
 
   public async getRiskParameters(): Promise<RiskParameters> {
-    // Mock binding call to ConfigurationContract
+    const config = await this.configClient();
+    const [
+      base_rate,
+      optimal_utilization,
+      slope_1,
+      slope_2,
+      reserve_factor,
+      liquidation_threshold,
+      liquidation_bonus,
+    ] = await Promise.all([
+      this.readCall<number>(config, "get_base_borrow_rate"),
+      this.readCall<number>(config, "get_optimal_utilization"),
+      this.readCall<number>(config, "get_slope1"),
+      this.readCall<number>(config, "get_slope2"),
+      this.readCall<number>(config, "get_reserve_factor"),
+      this.readCall<number>(config, "get_liquidation_threshold"),
+      this.readCall<number>(config, "get_liquidation_bonus"),
+    ]);
+
     return {
-      base_rate: 200, // 2%
-      optimal_utilization: 8000, // 80%
-      slope_1: 400, // 4%
-      slope_2: 7500, // 75%
-      reserve_factor: 1000, // 10%
-      liquidation_threshold: 8000, // 80%
-      liquidation_bonus: 10500, // 105% (5% bonus)
+      base_rate,
+      optimal_utilization,
+      slope_1,
+      slope_2,
+      reserve_factor,
+      liquidation_threshold,
+      liquidation_bonus,
     };
   }
 
-  // Lending Pool Operations
+  // --- Lending Pool Operations (write) -------------------------------------
 
   public async depositCollateral(asset: string, amount: bigint, signer: string): Promise<string> {
-    const poolAddress = this.registry["lending_pool"];
-    if (!poolAddress) throw new Error("Lending pool not found in registry");
-
-    console.log(`Depositing ${amount.toString()} of ${asset} to pool ${poolAddress} by ${signer}`);
-    // Here we would invoke the generated Soroban TS bindings:
-    // const tx = await lendingPoolClient.deposit({ asset, amount, caller: signer });
-    // return tx.hash;
-
-    return "mock_tx_hash_deposit";
+    const { assetAddress } = this.resolveAsset(asset);
+    const pool = await this.poolClient(signer);
+    return this.writeCall(pool, "deposit_collateral", { user: signer, asset: assetAddress, amount }, signer);
   }
 
-  public async borrow(asset: string, amount: bigint, signer: string): Promise<string> {
-    const poolAddress = this.registry["lending_pool"];
-    console.log(`Borrowing ${amount.toString()} of ${asset} from pool ${poolAddress} by ${signer}`);
-    // await lendingPoolClient.borrow({ asset, amount, caller: signer });
-    return "mock_tx_hash_borrow";
+  /**
+   * Borrows `amount` of `borrowAsset` against previously deposited collateral.
+   * Accepts either the 3-arg legacy shape (asset, amount, signer) used by the
+   * existing services -- collateral defaults to XLM in that case -- or the
+   * fuller 4-arg shape (collateralAsset, borrowAsset, amount, signer).
+   */
+  public async borrow(asset: string, amount: bigint, signer: string): Promise<string>;
+  public async borrow(collateralAsset: string, borrowAsset: string, amount: bigint, signer: string): Promise<string>;
+  public async borrow(a: string, b: string | bigint, c: bigint | string, d?: string): Promise<string> {
+    let collateralAsset: string;
+    let borrowAsset: string;
+    let amount: bigint;
+    let signer: string;
+
+    if (typeof b === "bigint") {
+      borrowAsset = a;
+      amount = b;
+      signer = c as string;
+      collateralAsset = "XLM";
+    } else {
+      collateralAsset = a;
+      borrowAsset = b;
+      amount = c as bigint;
+      signer = d as string;
+    }
+
+    const { assetAddress: collatAddr } = this.resolveAsset(collateralAsset);
+    const { assetAddress: borrowAddr } = this.resolveAsset(borrowAsset);
+    const pool = await this.poolClient(signer);
+    return this.writeCall(
+      pool,
+      "borrow",
+      { user: signer, collateral_asset: collatAddr, borrow_asset: borrowAddr, amount },
+      signer
+    );
   }
 
   public async repay(asset: string, amount: bigint, signer: string): Promise<string> {
-    const poolAddress = this.registry["lending_pool"];
-    console.log(`Repaying ${amount.toString()} of ${asset} to pool ${poolAddress} by ${signer}`);
-    // await lendingPoolClient.repay({ asset, amount, caller: signer });
-    return "mock_tx_hash_repay";
+    const { assetAddress } = this.resolveAsset(asset);
+    const pool = await this.poolClient(signer);
+    return this.writeCall(pool, "repay", { user: signer, asset: assetAddress, amount }, signer);
   }
 
-  public async withdrawCollateral(asset: string, amount: bigint, signer: string): Promise<string> {
-    const poolAddress = this.registry["lending_pool"];
-    console.log(`Withdrawing ${amount.toString()} of ${asset} from pool ${poolAddress} by ${signer}`);
-    // await lendingPoolClient.withdraw({ asset, amount, caller: signer });
-    return "mock_tx_hash_withdraw";
+  /** Same dual-shape story as `borrow`: (asset, amount, signer) defaults the debt asset to USDC. */
+  public async withdrawCollateral(asset: string, amount: bigint, signer: string): Promise<string>;
+  public async withdrawCollateral(
+    collateralAsset: string,
+    borrowAsset: string,
+    amount: bigint,
+    signer: string
+  ): Promise<string>;
+  public async withdrawCollateral(a: string, b: string | bigint, c: bigint | string, d?: string): Promise<string> {
+    let collateralAsset: string;
+    let borrowAsset: string;
+    let amount: bigint;
+    let signer: string;
+
+    if (typeof b === "bigint") {
+      collateralAsset = a;
+      amount = b;
+      signer = c as string;
+      borrowAsset = "USDC";
+    } else {
+      collateralAsset = a;
+      borrowAsset = b;
+      amount = c as bigint;
+      signer = d as string;
+    }
+
+    const { assetAddress: collatAddr } = this.resolveAsset(collateralAsset);
+    const { assetAddress: borrowAddr } = this.resolveAsset(borrowAsset);
+    const pool = await this.poolClient(signer);
+    return this.writeCall(
+      pool,
+      "withdraw_collateral",
+      { user: signer, collateral_asset: collatAddr, borrow_asset: borrowAddr, amount },
+      signer
+    );
   }
 
-  // Liquidation
+  // --- Liquidation -----------------------------------------------------------
 
   public async liquidate(
-    borrower: string, 
-    debtAsset: string, 
-    collatAsset: string, 
-    debtToCover: bigint, 
+    borrower: string,
+    debtAsset: string,
+    collatAsset: string,
+    debtToCover: bigint,
     liquidator: string
   ): Promise<string> {
-    const liqAddress = this.registry["liquidation_engine"];
-    if (!liqAddress) throw new Error("Liquidation engine not found in registry");
-
-    console.log(`Liquidating ${borrower} covering ${debtToCover.toString()} of ${debtAsset}`);
-    // await liquidationEngineClient.liquidate({ ... });
-    return "mock_tx_hash_liquidate";
+    const { assetAddress: debtAddr } = this.resolveAsset(debtAsset);
+    const { assetAddress: collatAddr } = this.resolveAsset(collatAsset);
+    const liq = await this.liquidationClient(liquidator);
+    return this.writeCall(
+      liq,
+      "liquidate",
+      {
+        liquidator,
+        borrower,
+        debt_asset: debtAddr,
+        collat_asset: collatAddr,
+        debt_to_cover: debtToCover,
+      },
+      liquidator
+    );
   }
 
-  // Data Queries
+  // --- Data Queries ------------------------------------------------------
 
   public async getUserPosition(user: string, asset: string): Promise<UserPosition> {
-    // return await lendingPoolClient.get_user_position_view({ user, asset });
+    const { assetAddress } = this.resolveAsset(asset);
+    const pool = await this.poolClient();
+    const position = await this.readCall<{
+      collateral_amount: bigint;
+      scaled_debt: bigint;
+      last_interaction: bigint;
+    }>(pool, "get_user_position_view", { user, asset: assetAddress });
+
     return {
-      collateral_amount: 1000n,
-      scaled_debt: 500n,
-      last_interaction: Date.now()
+      collateral_amount: position.collateral_amount,
+      scaled_debt: position.scaled_debt,
+      last_interaction: Number(position.last_interaction),
     };
   }
 
   public async getPoolStats(asset: string): Promise<PoolStats> {
-    // return await lendingPoolClient.get_pool_stats({ asset });
+    const { assetAddress } = this.resolveAsset(asset);
+    const pool = await this.poolClient();
+    const interest = await this.interestClient();
+    const [state, borrow_index] = await Promise.all([
+      this.readCall<{ total_liquidity: bigint; total_borrowed: bigint }>(pool, "get_pool_state_view", {
+        asset: assetAddress,
+      }),
+      this.readCall<bigint>(interest, "get_borrow_index", { asset: assetAddress }),
+    ]);
+
     return {
-      total_liquidity: 100000n,
-      total_borrowed: 20000n,
-      borrow_index: 1000000000000000000n // WAD
+      total_liquidity: state.total_liquidity,
+      total_borrowed: state.total_borrowed,
+      borrow_index,
     };
   }
 
-  // Markets
+  // --- Markets -------------------------------------------------------------
 
   public async getMarkets(): Promise<MarketData[]> {
-    // Would aggregate: oracleClient.get_price(), lendingPoolClient.get_pool_stats(),
-    // configurationClient.get_risk_parameters() per registered reserve.
-    return MOCK_MARKETS;
+    if (this.assets.length === 0) return [];
+
+    const [config, interest, pool, oracle] = await Promise.all([
+      this.configClient(),
+      this.interestClient(),
+      this.poolClient(),
+      this.oracleClient(),
+    ]);
+    const riskParams = await this.getRiskParameters();
+    const ltvBps = await this.readCall<number>(config, "get_ltv");
+
+    return Promise.all(
+      this.assets.map(async (asset) => {
+        const meta = ASSET_METADATA[asset.symbol] ?? {
+          name: asset.symbol,
+          iconUrl: "/assets/tokens/default.svg",
+          collateralEnabled: true,
+        };
+
+        const [state, priceWad] = await Promise.all([
+          this.readCall<{ total_liquidity: bigint; total_borrowed: bigint }>(pool, "get_pool_state_view", {
+            asset: asset.assetAddress,
+          }),
+          this.readCall<bigint>(oracle, "get_price", { asset: asset.assetAddress }).catch(() => 0n),
+        ]);
+
+        const totalLiquidity = state.total_liquidity;
+        const totalBorrowed = state.total_borrowed;
+
+        const utilizationBps = Number(
+          await this.readCall<bigint>(interest, "get_utilization_rate", {
+            total_liquidity: totalLiquidity,
+            total_borrowed: totalBorrowed,
+          })
+        );
+
+        const borrowApyBps = Number(
+          await this.readCall<bigint>(interest, "get_borrow_rate", {
+            utilization: BigInt(utilizationBps),
+            base_rate: BigInt(riskParams.base_rate),
+            optimal_utilization: BigInt(riskParams.optimal_utilization),
+            slope1: BigInt(riskParams.slope_1),
+            slope2: BigInt(riskParams.slope_2),
+          })
+        );
+
+        const supplyApyBps = Number(
+          await this.readCall<bigint>(interest, "get_supply_rate", {
+            borrow_rate: BigInt(borrowApyBps),
+            utilization: BigInt(utilizationBps),
+            reserve_factor: BigInt(riskParams.reserve_factor),
+          })
+        );
+
+        const priceUsd = Number(priceWad) / 1e18;
+
+        return {
+          symbol: asset.symbol,
+          name: meta.name,
+          assetAddress: asset.assetAddress,
+          iconUrl: meta.iconUrl,
+          priceUsd,
+          decimals: asset.decimals,
+          totalSupplied: totalLiquidity + totalBorrowed,
+          totalBorrowed,
+          availableLiquidity: totalLiquidity,
+          supplyApyBps,
+          borrowApyBps,
+          utilizationBps,
+          collateralEnabled: meta.collateralEnabled,
+          ltvBps: meta.collateralEnabled ? ltvBps : 0,
+          liquidationThresholdBps: meta.collateralEnabled ? riskParams.liquidation_threshold : 0,
+        } satisfies MarketData;
+      })
+    );
   }
 
   public async getMarket(symbol: string): Promise<MarketData | null> {
-    const market = MOCK_MARKETS.find(
-      (m) => m.symbol.toLowerCase() === symbol.toLowerCase()
-    );
-    return market ?? null;
+    const markets = await this.getMarkets();
+    return markets.find((m) => m.symbol.toLowerCase() === symbol.toLowerCase()) ?? null;
   }
 
-  // Supply
+  // --- Supply ----------------------------------------------------------------
 
   public async getSupplyPositions(user: string): Promise<SupplyPosition[]> {
-    // return await lendingPoolClient.get_supply_positions({ user });
-    if (!user) return [];
+    if (!user || this.assets.length === 0) return [];
 
-    return [
-      {
-        symbol: "XLM",
-        name: "Stellar Lumens",
-        iconUrl: "/assets/tokens/xlm.svg",
-        decimals: 7,
-        priceUsd: 0.112,
-        suppliedAmount: 12_500n,
-        supplyApyBps: 320,
-        interestEarned: 84n,
-      },
-      {
-        symbol: "USDC",
-        name: "USD Coin",
-        iconUrl: "/assets/tokens/usdc.svg",
-        decimals: 6,
-        priceUsd: 1.0,
-        suppliedAmount: 4_200n,
-        supplyApyBps: 480,
-        interestEarned: 31n,
-      },
-    ];
+    const markets = await this.getMarkets();
+    const positions = await Promise.all(
+      this.assets.map(async (asset) => {
+        const position = await this.getUserPosition(user, asset.symbol);
+        if (position.collateral_amount <= 0n) return null;
+
+        const market = markets.find((m) => m.symbol === asset.symbol);
+        const meta = ASSET_METADATA[asset.symbol] ?? { name: asset.symbol, iconUrl: "" };
+
+        return {
+          symbol: asset.symbol,
+          name: meta.name,
+          iconUrl: meta.iconUrl,
+          decimals: asset.decimals,
+          priceUsd: market?.priceUsd ?? 0,
+          suppliedAmount: position.collateral_amount,
+          supplyApyBps: market?.supplyApyBps ?? 0,
+          interestEarned: 0n,
+        } satisfies SupplyPosition;
+      })
+    );
+
+    return positions.filter((p): p is SupplyPosition => p !== null);
   }
 
   public async getWalletBalance(assetSymbol: string, user: string): Promise<bigint> {
-    // return await horizonClient.getBalance({ user, asset: assetSymbol });
     if (!user) return 0n;
-
-    const MOCK_BALANCES: Record<string, bigint> = {
-      XLM: 48_500n,
-      USDC: 9_200n,
-      AQUA: 1_250_000n,
-    };
-    return MOCK_BALANCES[assetSymbol.toUpperCase()] ?? 0n;
+    try {
+      const { assetAddress } = this.resolveAsset(assetSymbol);
+      const token = await this.client(assetAddress);
+      return await this.readCall<bigint>(token, "balance", { id: user });
+    } catch {
+      return 0n;
+    }
   }
 
   public async supply(asset: string, amount: bigint, signer: string): Promise<string> {
@@ -227,38 +498,80 @@ export class CredenceProtocol {
     return this.withdrawCollateral(asset, amount, signer);
   }
 
-  // Borrow
+  // --- Borrow ------------------------------------------------------------
 
   public async getBorrowPositions(user: string): Promise<BorrowPosition[]> {
-    // return await lendingPoolClient.get_borrow_positions({ user });
-    if (!user) return [];
+    if (!user || this.assets.length === 0) return [];
 
-    return [
-      {
-        symbol: "USDC",
-        name: "USD Coin",
-        iconUrl: "/assets/tokens/usdc.svg",
-        decimals: 6,
-        priceUsd: 1.0,
-        borrowedAmount: 2_600n,
-        borrowApyBps: 890,
-        accruedInterest: 14n,
-      },
-    ];
+    const markets = await this.getMarkets();
+    const interest = await this.interestClient();
+
+    const positions = await Promise.all(
+      this.assets.map(async (asset) => {
+        const position = await this.getUserPosition(user, asset.symbol);
+        if (position.scaled_debt <= 0n) return null;
+
+        const borrowIndex = await this.readCall<bigint>(interest, "get_borrow_index", {
+          asset: asset.assetAddress,
+        });
+        const actualDebt = (position.scaled_debt * borrowIndex) / WAD;
+
+        const market = markets.find((m) => m.symbol === asset.symbol);
+        const meta = ASSET_METADATA[asset.symbol] ?? { name: asset.symbol, iconUrl: "" };
+
+        return {
+          symbol: asset.symbol,
+          name: meta.name,
+          iconUrl: meta.iconUrl,
+          decimals: asset.decimals,
+          priceUsd: market?.priceUsd ?? 0,
+          borrowedAmount: actualDebt,
+          borrowApyBps: market?.borrowApyBps ?? 0,
+          accruedInterest: actualDebt > position.scaled_debt ? actualDebt - position.scaled_debt : 0n,
+        } satisfies BorrowPosition;
+      })
+    );
+
+    return positions.filter((p): p is BorrowPosition => p !== null);
   }
 
   public async getBorrowSnapshot(user: string): Promise<BorrowSnapshot> {
-    // Would aggregate the user's deposited collateral (across reserves) against
-    // configurationClient.get_risk_parameters() to derive max LTV / liquidation threshold.
-    if (!user) {
+    if (!user || this.assets.length === 0) {
       return { totalCollateralUsd: 0, totalDebtUsd: 0, maxLtvBps: 0, liquidationThresholdBps: 0 };
     }
 
+    const [riskParams, interest, config] = await Promise.all([
+      this.getRiskParameters(),
+      this.interestClient(),
+      this.configClient(),
+    ]);
+    const ltvBps = await this.readCall<number>(config, "get_ltv");
+
+    let totalCollateralUsd = 0;
+    let totalDebtUsd = 0;
+
+    for (const asset of this.assets) {
+      const position = await this.getUserPosition(user, asset.symbol);
+      const priceUsd = await this.getAssetPriceUsd(asset.assetAddress);
+
+      if (position.collateral_amount > 0n) {
+        totalCollateralUsd += toNumber(position.collateral_amount, asset.decimals) * priceUsd;
+      }
+
+      if (position.scaled_debt > 0n) {
+        const borrowIndex = await this.readCall<bigint>(interest, "get_borrow_index", {
+          asset: asset.assetAddress,
+        });
+        const actualDebt = (position.scaled_debt * borrowIndex) / WAD;
+        totalDebtUsd += toNumber(actualDebt, asset.decimals) * priceUsd;
+      }
+    }
+
     return {
-      totalCollateralUsd: 5_800,
-      totalDebtUsd: 2_600,
-      maxLtvBps: 7500,
-      liquidationThresholdBps: 8200,
+      totalCollateralUsd,
+      totalDebtUsd,
+      maxLtvBps: ltvBps,
+      liquidationThresholdBps: riskParams.liquidation_threshold,
     };
   }
 }
