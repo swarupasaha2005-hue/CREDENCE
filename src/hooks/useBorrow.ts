@@ -2,10 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BorrowService } from "../lib/services/borrow-service";
+import {
+  BORROW_POSITIONS_QUERY_KEY,
+  BORROWABLE_ASSETS_QUERY_KEY,
+  BORROW_SNAPSHOT_QUERY_KEY,
+  invalidateProtocolQueries,
+} from "./protocol-query-keys";
 
-const BORROW_POSITIONS_QUERY_KEY = ["borrow-positions"] as const;
-const BORROWABLE_ASSETS_QUERY_KEY = ["borrowable-assets"] as const;
-const BORROW_SNAPSHOT_QUERY_KEY = ["borrow-snapshot"] as const;
 const POLL_INTERVAL_MS = 30_000;
 
 export function useBorrowPositions(user: string) {
@@ -53,19 +56,13 @@ export function useBorrowSnapshot(user: string) {
   };
 }
 
-function invalidateBorrowQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: BORROW_POSITIONS_QUERY_KEY });
-  queryClient.invalidateQueries({ queryKey: BORROWABLE_ASSETS_QUERY_KEY });
-  queryClient.invalidateQueries({ queryKey: BORROW_SNAPSHOT_QUERY_KEY });
-}
-
 export function useBorrowMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       BorrowService.borrow(symbol, amount, signer),
-    onSuccess: () => invalidateBorrowQueries(queryClient),
+    onSuccess: () => invalidateProtocolQueries(queryClient),
   });
 }
 
@@ -75,6 +72,6 @@ export function useRepayMutation() {
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       BorrowService.repay(symbol, amount, signer),
-    onSuccess: () => invalidateBorrowQueries(queryClient),
+    onSuccess: () => invalidateProtocolQueries(queryClient),
   });
 }

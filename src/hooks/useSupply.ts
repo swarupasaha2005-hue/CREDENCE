@@ -2,9 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SupplyService } from "../lib/services/supply-service";
+import {
+  SUPPLY_ASSETS_QUERY_KEY,
+  SUPPLY_POSITIONS_QUERY_KEY,
+  invalidateProtocolQueries,
+} from "./protocol-query-keys";
 
-const SUPPLY_ASSETS_QUERY_KEY = ["supply-assets"] as const;
-const SUPPLY_POSITIONS_QUERY_KEY = ["supply-positions"] as const;
 const POLL_INTERVAL_MS = 30_000;
 
 export function useSupplyAssets(user: string) {
@@ -43,10 +46,7 @@ export function useSupplyMutation() {
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       SupplyService.supply(symbol, amount, signer),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SUPPLY_POSITIONS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: SUPPLY_ASSETS_QUERY_KEY });
-    },
+    onSuccess: () => invalidateProtocolQueries(queryClient),
   });
 }
 
@@ -56,9 +56,6 @@ export function useWithdrawMutation() {
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       SupplyService.withdraw(symbol, amount, signer),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SUPPLY_POSITIONS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: SUPPLY_ASSETS_QUERY_KEY });
-    },
+    onSuccess: () => invalidateProtocolQueries(queryClient),
   });
 }

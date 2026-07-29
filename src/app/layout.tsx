@@ -3,7 +3,8 @@ import { Inter, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import Navbar from "../components/landing/Navbar";
 import Footer from "../components/landing/Footer";
-import { StellarProvider } from "../context/StellarContext";
+import { WalletProvider } from "../context/WalletContext";
+import { QueryProvider } from "../lib/providers/query-provider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const instrumentSerif = Instrument_Serif({ 
@@ -25,11 +26,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${instrumentSerif.variable} font-sans antialiased overflow-x-hidden`}>
-        <StellarProvider>
-          <Navbar />
-          <main>{children}</main>
-          <Footer />
-        </StellarProvider>
+        <QueryProvider>
+          <WalletProvider>
+            <Navbar />
+            <main>{children}</main>
+            <Footer />
+          </WalletProvider>
+        </QueryProvider>
       </body>
     </html>
   );

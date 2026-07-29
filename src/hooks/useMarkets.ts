@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { MarketService } from "../lib/services/market-service";
+import { MARKETS_QUERY_KEY } from "./protocol-query-keys";
 
-const MARKETS_QUERY_KEY = ["markets"] as const;
 const POLL_INTERVAL_MS = 30_000;
 
 export function useMarkets() {
