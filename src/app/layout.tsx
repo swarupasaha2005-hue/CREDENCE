@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import Navbar from "../components/landing/Navbar";
 import Footer from "../components/landing/Footer";
+import { StellarProvider } from "../context/StellarContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const instrumentSerif = Instrument_Serif({ 
@@ -24,9 +25,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${instrumentSerif.variable} font-sans antialiased overflow-x-hidden`}>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
+        <StellarProvider>
+          <Navbar />
+          <main>{children}</main>
+          <Footer />
+        </StellarProvider>
       </body>
     </html>
   );

@@ -20,6 +20,12 @@ export function formatTokenAmount(amount: bigint, decimals: number): number {
   return Number(amount) / 10 ** decimals;
 }
 
+export function formatTokenQuantity(amount: bigint, decimals: number, maxDigits = 4): string {
+  return formatTokenAmount(amount, decimals).toLocaleString(LOCALE, {
+    maximumFractionDigits: maxDigits,
+  });
+}
+
 export function formatCompactUsdAmount(amount: number): string {
   return amount.toLocaleString(LOCALE, {
     style: "currency",

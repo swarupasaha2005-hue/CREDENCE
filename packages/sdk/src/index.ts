@@ -2,7 +2,10 @@ import {
   UserPosition,
   RiskParameters,
   PoolStats,
-  MarketData
+  MarketData,
+  SupplyPosition,
+  BorrowPosition,
+  BorrowSnapshot
 } from "../../interfaces/src";
 
 const MOCK_MARKETS: MarketData[] = [
@@ -172,5 +175,90 @@ export class CredenceProtocol {
       (m) => m.symbol.toLowerCase() === symbol.toLowerCase()
     );
     return market ?? null;
+  }
+
+  // Supply
+
+  public async getSupplyPositions(user: string): Promise<SupplyPosition[]> {
+    // return await lendingPoolClient.get_supply_positions({ user });
+    if (!user) return [];
+
+    return [
+      {
+        symbol: "XLM",
+        name: "Stellar Lumens",
+        iconUrl: "/assets/tokens/xlm.svg",
+        decimals: 7,
+        priceUsd: 0.112,
+        suppliedAmount: 12_500n,
+        supplyApyBps: 320,
+        interestEarned: 84n,
+      },
+      {
+        symbol: "USDC",
+        name: "USD Coin",
+        iconUrl: "/assets/tokens/usdc.svg",
+        decimals: 6,
+        priceUsd: 1.0,
+        suppliedAmount: 4_200n,
+        supplyApyBps: 480,
+        interestEarned: 31n,
+      },
+    ];
+  }
+
+  public async getWalletBalance(assetSymbol: string, user: string): Promise<bigint> {
+    // return await horizonClient.getBalance({ user, asset: assetSymbol });
+    if (!user) return 0n;
+
+    const MOCK_BALANCES: Record<string, bigint> = {
+      XLM: 48_500n,
+      USDC: 9_200n,
+      AQUA: 1_250_000n,
+    };
+    return MOCK_BALANCES[assetSymbol.toUpperCase()] ?? 0n;
+  }
+
+  public async supply(asset: string, amount: bigint, signer: string): Promise<string> {
+    return this.depositCollateral(asset, amount, signer);
+  }
+
+  public async withdraw(asset: string, amount: bigint, signer: string): Promise<string> {
+    return this.withdrawCollateral(asset, amount, signer);
+  }
+
+  // Borrow
+
+  public async getBorrowPositions(user: string): Promise<BorrowPosition[]> {
+    // return await lendingPoolClient.get_borrow_positions({ user });
+    if (!user) return [];
+
+    return [
+      {
+        symbol: "USDC",
+        name: "USD Coin",
+        iconUrl: "/assets/tokens/usdc.svg",
+        decimals: 6,
+        priceUsd: 1.0,
+        borrowedAmount: 2_600n,
+        borrowApyBps: 890,
+        accruedInterest: 14n,
+      },
+    ];
+  }
+
+  public async getBorrowSnapshot(user: string): Promise<BorrowSnapshot> {
+    // Would aggregate the user's deposited collateral (across reserves) against
+    // configurationClient.get_risk_parameters() to derive max LTV / liquidation threshold.
+    if (!user) {
+      return { totalCollateralUsd: 0, totalDebtUsd: 0, maxLtvBps: 0, liquidationThresholdBps: 0 };
+    }
+
+    return {
+      totalCollateralUsd: 5_800,
+      totalDebtUsd: 2_600,
+      maxLtvBps: 7500,
+      liquidationThresholdBps: 8200,
+    };
   }
 }

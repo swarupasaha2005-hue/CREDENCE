@@ -55,3 +55,40 @@ export interface MarketData {
   ltvBps: number;
   liquidationThresholdBps: number;
 }
+
+export interface SupplyAsset extends MarketData {
+  walletBalance: bigint;
+}
+
+export interface SupplyPosition {
+  symbol: string;
+  name: string;
+  iconUrl: string;
+  decimals: number;
+  priceUsd: number;
+  suppliedAmount: bigint;
+  supplyApyBps: number;
+  interestEarned: bigint;
+}
+
+export interface BorrowPosition {
+  symbol: string;
+  name: string;
+  iconUrl: string;
+  decimals: number;
+  priceUsd: number;
+  borrowedAmount: bigint;
+  borrowApyBps: number;
+  accruedInterest: bigint;
+}
+
+export interface BorrowableAsset extends MarketData {
+  maxBorrowable: bigint;
+}
+
+export interface BorrowSnapshot {
+  totalCollateralUsd: number;
+  totalDebtUsd: number;
+  maxLtvBps: number;
+  liquidationThresholdBps: number;
+}
