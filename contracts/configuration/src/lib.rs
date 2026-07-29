@@ -17,6 +17,7 @@ pub enum DataKey {
     Treasury,
     Oracle,
     LendingPool,
+    InterestModel,
 }
 
 #[contract]
@@ -146,6 +147,26 @@ impl ConfigurationContract {
 
     pub fn get_lending_pool(env: Env) -> Address {
         env.storage().instance().get(&DataKey::LendingPool).expect("Pool not set")
+    }
+
+    pub fn set_interest_model(env: Env, model: Address) {
+        check_admin(&env);
+        env.storage().instance().set(&DataKey::InterestModel, &model);
+        env.events().publish((Symbol::new(&env, "set_int_mod"),), model);
+    }
+
+    pub fn get_interest_model(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::InterestModel).expect("Interest model not set")
+    }
+
+    // Aliases matching the ConfigInterface trait names expected by
+    // lending_pool and liquidation_engine cross-contract clients.
+    pub fn get_liq_threshold(env: Env) -> u32 {
+        Self::get_liquidation_threshold(env)
+    }
+
+    pub fn get_liq_bonus(env: Env) -> u32 {
+        Self::get_liquidation_bonus(env)
     }
 
     pub fn transfer_admin(env: Env, new_admin: Address) {

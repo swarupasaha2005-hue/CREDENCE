@@ -157,7 +157,7 @@ impl LiquidationEngine {
         );
 
         // 11. Emit Events
-        env.events().publish((Symbol::new(&env, "liquidate"), liquidator, borrower), (debt_asset, actual_repayment));
+        env.events().publish((Symbol::new(&env, "liquidate"), liquidator.clone(), borrower.clone()), (debt_asset, actual_repayment));
         env.events().publish((Symbol::new(&env, "collat_seized"), liquidator, borrower), (collat_asset, actual_collat_seized));
     }
 }

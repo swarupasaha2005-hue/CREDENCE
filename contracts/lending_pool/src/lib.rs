@@ -321,6 +321,72 @@ impl LendingPool {
     pub fn get_pool_state_view(env: Env, asset: Address) -> PoolState {
         Self::get_pool_state(&env, &asset)
     }
+
+    pub fn get_current_borrow_index_view(env: Env, asset: Address) -> i128 {
+        let config_addr: Address = env.storage().instance().get(&DataKey::ConfigAddress).unwrap();
+        let config = ConfigClient::new(&env, &config_addr);
+        let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
+        interest_model.get_borrow_index(&asset)
+    }
+
+    /// Called by the Liquidation Engine to burn a borrower's debt and seize collateral.
+    /// The liquidator's repayment tokens must already have been transferred to this pool
+    /// (the Liquidation Engine does this before invoking this function).
+    pub fn execute_liquidation_burn(
+        env: Env,
+        borrower: Address,
+        liquidator: Address,
+        collat_asset: Address,
+        debt_asset: Address,
+        actual_debt_repaid: i128,
+        collat_seized: i128,
+    ) {
+        let config_addr: Address = env.storage().instance().get(&DataKey::ConfigAddress).unwrap();
+        let config = ConfigClient::new(&env, &config_addr);
+        let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
+
+        // 1. Reduce borrower's scaled debt
+        let current_index = interest_model.get_borrow_index(&debt_asset);
+        let mut debt_position = Self::get_user_position(&env, &borrower, &debt_asset);
+        let repaid_scaled = (actual_debt_repaid * WAD) / current_index;
+        debt_position.scaled_debt -= repaid_scaled;
+        if debt_position.scaled_debt < 0 { debt_position.scaled_debt = 0; }
+        debt_position.last_interaction = env.ledger().timestamp();
+
+        let debt_key = DataKey::UserPosition(borrower.clone(), debt_asset.clone());
+        env.storage().persistent().set(&debt_key, &debt_position);
+        extend_ttl(&env, &debt_key);
+
+        // 2. Update debt asset pool state (repayment increases liquidity, decreases borrowed)
+        let mut debt_state = Self::get_pool_state(&env, &debt_asset);
+        debt_state.total_liquidity += actual_debt_repaid;
+        debt_state.total_borrowed -= actual_debt_repaid;
+        if debt_state.total_borrowed < 0 { debt_state.total_borrowed = 0; }
+        let debt_pool_key = DataKey::PoolState(debt_asset.clone());
+        env.storage().persistent().set(&debt_pool_key, &debt_state);
+        extend_ttl(&env, &debt_pool_key);
+
+        // 3. Reduce borrower's collateral and transfer seized collateral to liquidator
+        let mut collat_position = Self::get_user_position(&env, &borrower, &collat_asset);
+        collat_position.collateral_amount -= collat_seized;
+        if collat_position.collateral_amount < 0 { collat_position.collateral_amount = 0; }
+        collat_position.last_interaction = env.ledger().timestamp();
+
+        let collat_key = DataKey::UserPosition(borrower.clone(), collat_asset.clone());
+        env.storage().persistent().set(&collat_key, &collat_position);
+        extend_ttl(&env, &collat_key);
+
+        let mut collat_state = Self::get_pool_state(&env, &collat_asset);
+        collat_state.total_liquidity -= collat_seized;
+        let collat_pool_key = DataKey::PoolState(collat_asset.clone());
+        env.storage().persistent().set(&collat_pool_key, &collat_state);
+        extend_ttl(&env, &collat_pool_key);
+
+        let token_client = token::Client::new(&env, &collat_asset);
+        token_client.transfer(&env.current_contract_address(), &liquidator, &collat_seized);
+
+        env.events().publish((Symbol::new(&env, "liq_burn"), borrower, liquidator), (debt_asset, actual_debt_repaid, collat_seized));
+    }
 }
 
 mod test;
