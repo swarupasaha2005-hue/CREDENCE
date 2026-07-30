@@ -9,6 +9,7 @@ import { useStellar } from "../../context/StellarContext";
 import { useBorrowMutation } from "../../hooks/useBorrow";
 import { computeBorrowPowerRemainingUsd, projectBorrow } from "../../lib/borrow-risk";
 import { formatCompactUsdAmount, formatPercent, formatTokenQuantity } from "../../lib/market-format";
+import { captureWalletError } from "../../lib/monitoring";
 import { TransactionState, TransactionStatus } from "../earn/TransactionStatus";
 import { HealthFactorBadge } from "./HealthFactorBadge";
 import { RiskIndicator } from "./RiskIndicator";
@@ -52,7 +53,7 @@ interface BorrowModalContentProps {
 }
 
 function BorrowModalContent({ asset, snapshot, onClose }: BorrowModalContentProps) {
-  const { address } = useStellar();
+  const { address, walletId, network } = useStellar();
   const [amount, setAmount] = useState("");
   const mutation = useBorrowMutation();
 
@@ -78,8 +79,9 @@ function BorrowModalContent({ asset, snapshot, onClose }: BorrowModalContentProp
     try {
       await mutation.mutateAsync({ symbol: asset.symbol, amount: amountRaw, signer: address });
       toast.success("Borrow successful");
-    } catch {
+    } catch (error) {
       toast.error("Borrow failed");
+      captureWalletError(error, { walletType: walletId, action: "borrow", network });
     }
   };
 

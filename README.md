@@ -58,6 +58,7 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Deployment](#-deployment)
 - [Testnet User Verification](#-testnet-user-verification)
 - [Known Limitations](#️-known-limitations)
+- [Monitoring](#-monitoring)
 - [CI](#️-ci)
 - [Roadmap](#️-roadmap)
 - [Contributing](#-contributing)
@@ -574,6 +575,39 @@ transaction hash, and a summary of totals from the most recent run.
 - **Three supported assets.** XLM, USDC, and AQUA are the only markets live on Testnet today.
 - **xBull is not wired up, and it's not a placeholder gap — it's a real SDK constraint.** The only published xBull package (`@creit.tech/xbull-wallet-connect`) communicates via `window.webkit.messageHandlers`, a Cordova/WKWebView bridge that only exists inside xBull's own mobile in-app browser. It throws in any normal desktop browser, extension or not, so it cannot back a website's "Connect Wallet" button. [Albedo](https://albedo.link/) was implemented instead — a maintained, zero-dependency, popup-based wallet with an official npm SDK (`@albedo-link/intent`) that genuinely works from any browser.
 - **Albedo has no passive reconnect.** Unlike Freighter, Albedo has no persisted-session API — every connection is a fresh, user-approved popup. Reloading the page will not silently restore an Albedo session (Freighter sessions do restore, when previously granted). This is reflected honestly in the UI rather than faking a session Albedo can't actually confirm.
+
+<br />
+
+---
+
+## 📡 Monitoring
+
+**Provider:** [Sentry](https://sentry.io) via the `@sentry/nextjs` SDK, wired into the App Router.
+
+**What is monitored:**
+- Uncaught server exceptions (via `onRequestError` in `src/instrumentation.ts`)
+- React rendering errors, both route-level (`src/app/error.tsx`) and root-layout-level (`src/app/global-error.tsx`)
+- Unhandled promise rejections and client-side runtime errors (via `src/instrumentation-client.ts`)
+- API/route handler errors
+- Wallet transaction failures — connect, send, supply, withdraw, borrow, and repay — tagged with wallet provider, action, and network via `captureWalletError()` in `src/lib/monitoring.ts`. Only non-sensitive tags (wallet type, action name, network) are attached; signed transactions, keys, and seed phrases are never sent to Sentry.
+
+**Enabled in production only.** Both the server (`src/instrumentation.ts`) and client (`src/instrumentation-client.ts`) entry points check `NODE_ENV === "production"` and require a DSN to be set before calling `Sentry.init`, so local development and `next dev` behavior is unchanged — no events are sent unless you deploy with the env vars below configured.
+
+### Configuring Sentry
+
+1. Create a project in Sentry for this app (platform: Next.js).
+2. Set the environment variables below in your production environment (e.g. Vercel project settings).
+3. Deploy. Source maps are uploaded automatically at build time when `SENTRY_AUTH_TOKEN` is present; the build falls back to skipping source map upload (with app functionality unaffected) if it's absent.
+
+### Environment variables required
+
+| Variable | Where it's used | Required for |
+|---|---|---|
+| `SENTRY_DSN` | Server/edge runtime (`src/instrumentation.ts`) | Server-side error capture |
+| `NEXT_PUBLIC_SENTRY_DSN` | Browser runtime (`src/instrumentation-client.ts`) | Client-side error capture |
+| `SENTRY_ORG` | Build time (`next.config.ts`) | Source map upload |
+| `SENTRY_PROJECT` | Build time (`next.config.ts`) | Source map upload |
+| `SENTRY_AUTH_TOKEN` | Build time (`next.config.ts`) | Source map upload (keep this secret; never commit it) |
 
 <br />
 

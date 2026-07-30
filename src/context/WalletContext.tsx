@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AssetBalance, WalletService } from "../lib/services/wallet-service";
 import { WalletAdapter, WalletId, WalletServiceError, SUPPORTED_WALLETS, getAdapter } from "../lib/services/wallet-adapters";
 import { protocol } from "../lib/protocol";
+import { captureWalletError } from "../lib/monitoring";
 
 export type { WalletId } from "../lib/services/wallet-adapters";
 
@@ -149,6 +150,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         toast.error(describeWalletError(error, chosenAdapter.name));
+        captureWalletError(error, { walletType: id, action: "connect", network: null });
       } finally {
         setConnecting(false);
       }
@@ -217,10 +219,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ? error.message
             : "Transaction failed or was rejected";
         toast.error(message);
+        captureWalletError(error, { walletType: walletId, action: "send", network });
         return null;
       }
     },
-    [address, network, adapter, fetchBalancesSilently]
+    [address, network, adapter, walletId, fetchBalancesSilently]
   );
 
   const xlmBalance = balances.find((b) => b.symbol === "XLM")?.balance ?? null;

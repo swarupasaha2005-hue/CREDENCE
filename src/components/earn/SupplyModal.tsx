@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useStellar } from "../../context/StellarContext";
 import { useSupplyMutation, useWithdrawMutation } from "../../hooks/useSupply";
 import { formatCompactUsdAmount, formatPercent } from "../../lib/market-format";
+import { captureWalletError } from "../../lib/monitoring";
 import { TransactionState, TransactionStatus } from "./TransactionStatus";
 
 function toTransactionState(status: "idle" | "pending" | "success" | "error"): TransactionState {
@@ -66,7 +67,7 @@ interface SupplyModalContentProps {
 }
 
 function SupplyModalContent({ target, mode, onClose }: SupplyModalContentProps) {
-  const { address } = useStellar();
+  const { address, walletId, network } = useStellar();
   const [amount, setAmount] = useState("");
   const supplyMutation = useSupplyMutation();
   const withdrawMutation = useWithdrawMutation();
@@ -91,8 +92,9 @@ function SupplyModalContent({ target, mode, onClose }: SupplyModalContentProps) 
     try {
       await mutation.mutateAsync({ symbol: target.symbol, amount: amountRaw, signer: address });
       toast.success(mode === "withdraw" ? "Withdrawal successful" : "Supply successful");
-    } catch {
+    } catch (error) {
       toast.error(mode === "withdraw" ? "Withdrawal failed" : "Supply failed");
+      captureWalletError(error, { walletType: walletId, action: mode, network });
     }
   };
 
