@@ -57,8 +57,10 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Local Development](#-local-development)
 - [Deployment](#-deployment)
 - [Testnet User Verification](#-testnet-user-verification)
+- [User Feedback](#-user-feedback)
 - [Known Limitations](#️-known-limitations)
 - [Monitoring](#-monitoring)
+- [Analytics](#-analytics)
 - [CI](#️-ci)
 - [Roadmap](#️-roadmap)
 - [Contributing](#-contributing)
@@ -564,6 +566,30 @@ transaction hash, and a summary of totals from the most recent run.
 
 ---
 
+## 💬 User Feedback
+
+**Why:** Credence is a hackathon submission, and the fastest way to find out what's actually confusing or missing is to ask the people using it — without standing up a database, an auth flow, or anywhere to store personal data just to collect a few opinions.
+
+**How it works:** A **Feedback** button lives in the site footer (`src/components/shared/FeedbackButton.tsx`). Clicking it opens a Google Form in a new tab — the form is the entire feedback pipeline, front to back. There is no in-app form, no submission handler, and no backend; Credence never sees or stores a response.
+
+**Configuration:**
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_FEEDBACK_FORM_URL` | The public URL of the Google Form to open (e.g. `https://forms.gle/xxxxxxx`). |
+
+To enable it, create a Google Form with the questions you want (rating, favorite feature, improvements, etc.), copy its shareable link, and set `NEXT_PUBLIC_FEEDBACK_FORM_URL` in your environment (e.g. Vercel project settings).
+
+If the variable is not set, the button renders **disabled** with a tooltip explaining that feedback collection isn't configured for that deployment, rather than linking somewhere broken or silently doing nothing.
+
+**Where responses live:** Entirely in Google Forms / the linked Google Sheet — Credence's frontend and infrastructure never touch response data, so no personal information collected in the survey is ever stored inside this application.
+
+See [`docs/user-feedback.md`](docs/user-feedback.md) for the form's purpose, how to pull responses, and a blank summary template to fill in once real responses come in.
+
+<br />
+
+---
+
 ## ⚠️ Known Limitations
 
 > [!IMPORTANT]
@@ -608,6 +634,31 @@ transaction hash, and a summary of totals from the most recent run.
 | `SENTRY_ORG` | Build time (`next.config.ts`) | Source map upload |
 | `SENTRY_PROJECT` | Build time (`next.config.ts`) | Source map upload |
 | `SENTRY_AUTH_TOKEN` | Build time (`next.config.ts`) | Source map upload (keep this secret; never commit it) |
+
+<br />
+
+---
+
+## 📊 Analytics
+
+**What is tracked:** [Vercel Web Analytics](https://vercel.com/docs/analytics) (`@vercel/analytics`), auto-instrumented in `src/app/layout.tsx` via the `<Analytics />` component, plus a handful of lightweight custom events fired from `src/lib/analytics.ts`:
+
+| Event | Fired from | Payload |
+|---|---|---|
+| Page view | Automatic (`<Analytics />`) | route only |
+| `wallet_connect` | `src/context/WalletContext.tsx` on successful connect | `walletType` (Freighter/Albedo) |
+| `supply` | `src/components/earn/SupplyModal.tsx` on successful supply | `symbol`, `walletType` |
+| `withdraw` | `src/components/earn/SupplyModal.tsx` on successful withdrawal | `symbol`, `walletType` |
+| `borrow` | `src/components/borrow/BorrowModal.tsx` on successful borrow | `symbol`, `walletType` |
+| `repay` | `src/components/borrow/RepayModal.tsx` on successful repayment | `symbol`, `walletType` |
+
+Liquidation is **not currently tracked** — there is no liquidation interface in the frontend yet (see [Known Limitations](#️-known-limitations)); the `trackProtocolAction` helper already accepts a `liquidation` action so wiring it up is a one-line addition once that UI ships.
+
+No wallet address, transaction amount, XDR, or any other user-identifiable data is ever attached to an event — only the asset symbol and which wallet provider was used.
+
+**Where to view it:** the [Analytics tab](https://vercel.com/docs/analytics/quickstart) of this project's dashboard on [Vercel](https://vercel.com). Custom events appear there alongside automatic page views; no separate backend, database, or third-party analytics account is required.
+
+**Why it was added:** to understand real Testnet usage (which pages get traffic, which wallet users prefer, and which protocol actions — supply/withdraw/borrow/repay — actually get used) without standing up any infrastructure or collecting anything that could identify a user.
 
 <br />
 

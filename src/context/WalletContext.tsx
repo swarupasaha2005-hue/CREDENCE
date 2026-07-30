@@ -7,6 +7,7 @@ import { AssetBalance, WalletService } from "../lib/services/wallet-service";
 import { WalletAdapter, WalletId, WalletServiceError, SUPPORTED_WALLETS, getAdapter } from "../lib/services/wallet-adapters";
 import { protocol } from "../lib/protocol";
 import { captureWalletError } from "../lib/monitoring";
+import { trackWalletConnected } from "../lib/analytics";
 
 export type { WalletId } from "../lib/services/wallet-adapters";
 
@@ -145,6 +146,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         if (net === "TESTNET") {
           toast.success(`Connected via ${chosenAdapter.name}`);
+          trackWalletConnected(id);
         } else {
           toast.warning(`Please switch to Stellar Testnet in ${chosenAdapter.name}`);
         }

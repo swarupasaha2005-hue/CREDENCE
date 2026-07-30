@@ -66,7 +66,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#050505] h-[88px]">
+    <nav aria-label="Main Navigation" className="fixed top-0 left-0 right-0 z-50 bg-[#050505] h-[88px]">
       {/* 3-column Grid Layout for Desktop, 2-column for Mobile */}
       <div className="h-full px-6 md:px-8 lg:px-[48px] grid grid-cols-2 md:grid-cols-[1.9fr_auto_1fr] items-center">
         
@@ -105,7 +105,7 @@ const Navbar = () => {
         </div>
 
         {/* Center Column - Navigation */}
-        <div className="hidden md:flex items-center justify-center gap-[48px]">
+        <div className="hidden md:flex items-center justify-center gap-[24px] lg:gap-[48px]">
           {NAV_ITEMS.map(({ label, href }) => {
             const isActive = pathname === href || pathname?.startsWith(`${href}/`);
 
@@ -113,7 +113,7 @@ const Navbar = () => {
               <Link
                 key={label}
                 href={href}
-                className={`group relative text-sm font-medium py-1.5 transition-colors duration-[250ms] ease-out ${
+                className={`group relative text-sm font-medium py-1.5 transition-colors duration-[250ms] ease-out rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] ${
                   isActive ? "text-[#E88DAF]" : "text-white/75 hover:text-[#E88DAF]"
                 }`}
               >
@@ -130,9 +130,9 @@ const Navbar = () => {
         </div>
 
         {/* Right Column - Actions */}
-        <div className="hidden md:flex items-center justify-end gap-[20px]">
+        <div className="flex items-center justify-end gap-3 md:gap-[20px]">
           {/* Stellar Testnet Pill */}
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.06] text-white/[0.88] text-xs font-medium cursor-default">
+          <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.06] text-white/[0.88] text-xs font-medium cursor-default">
             <span className={`w-2 h-2 rounded-full ${connected && network !== 'TESTNET' ? 'bg-yellow-500' : 'bg-[#E88DAF]'}`} />
             {connected && network !== 'TESTNET' ? 'Wrong Network' : 'Stellar Testnet'}
           </div>
@@ -146,7 +146,7 @@ const Navbar = () => {
               aria-haspopup={connected ? "menu" : undefined}
               aria-expanded={connected ? isWalletMenuOpen : undefined}
               aria-label={connected ? `Wallet menu for ${shortAddress}` : "Connect Wallet"}
-              className="rounded-full px-7 py-3 bg-[#E88DAF] text-[#050505] font-medium text-[16px] transition-all duration-[250ms] ease-out hover:bg-[#F3A6C3] hover:-translate-y-[1px] active:bg-[#DD7EA5] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="rounded-full min-h-[44px] px-5 md:px-7 py-2.5 md:py-3 bg-[#E88DAF] text-[#050505] font-medium text-[14px] md:text-[16px] transition-all duration-[250ms] ease-out hover:bg-[#F3A6C3] hover:-translate-y-[1px] active:bg-[#DD7EA5] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
             >
               {connecting ? "Connecting..." : connected ? shortAddress : "Connect Wallet"}
             </button>
@@ -202,19 +202,20 @@ const Navbar = () => {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Mobile menu button */}
-        <div className="md:hidden flex items-center justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={isMobileMenuOpen}
-            onClick={() => setIsMobileMenuOpen((open) => !open)}
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5 text-white" /> : <Activity className="w-5 h-5 text-white" />}
-          </Button>
+          {/* Mobile menu button */}
+          <div className="md:hidden flex items-center justify-end ml-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-11 h-11"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Activity className="w-6 h-6 text-white" />}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -229,7 +230,7 @@ const Navbar = () => {
                 key={label}
                 href={href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`text-sm font-medium py-1.5 transition-colors duration-[250ms] ease-out ${
+                className={`text-sm font-medium py-2 transition-colors duration-[250ms] ease-out rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] ${
                   isActive ? "text-[#E88DAF]" : "text-white/75 hover:text-[#E88DAF]"
                 }`}
               >

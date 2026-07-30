@@ -38,6 +38,7 @@ yarn-error.log*
 
 # rust / soroban contracts
 target/
+test_snapshots/
 
 # typescript
 *.tsbuildinfo

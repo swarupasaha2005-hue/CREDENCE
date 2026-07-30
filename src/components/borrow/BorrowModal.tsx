@@ -10,6 +10,7 @@ import { useBorrowMutation } from "../../hooks/useBorrow";
 import { computeBorrowPowerRemainingUsd, projectBorrow } from "../../lib/borrow-risk";
 import { formatCompactUsdAmount, formatPercent, formatTokenQuantity } from "../../lib/market-format";
 import { captureWalletError } from "../../lib/monitoring";
+import { trackProtocolAction } from "../../lib/analytics";
 import { TransactionState, TransactionStatus } from "../earn/TransactionStatus";
 import { HealthFactorBadge } from "./HealthFactorBadge";
 import { RiskIndicator } from "./RiskIndicator";
@@ -79,6 +80,7 @@ function BorrowModalContent({ asset, snapshot, onClose }: BorrowModalContentProp
     try {
       await mutation.mutateAsync({ symbol: asset.symbol, amount: amountRaw, signer: address });
       toast.success("Borrow successful");
+      trackProtocolAction("borrow", { symbol: asset.symbol, walletType: walletId });
     } catch (error) {
       toast.error("Borrow failed");
       captureWalletError(error, { walletType: walletId, action: "borrow", network });

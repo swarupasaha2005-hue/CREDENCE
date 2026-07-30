@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import "./globals.css";
 import Navbar from "../components/landing/Navbar";
@@ -35,6 +36,7 @@ export default function RootLayout({
             <Toaster theme="dark" position="bottom-right" richColors />
           </WalletProvider>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );

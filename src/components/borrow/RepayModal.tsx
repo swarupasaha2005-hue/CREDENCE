@@ -9,6 +9,7 @@ import { useStellar } from "../../context/StellarContext";
 import { useRepayMutation } from "../../hooks/useBorrow";
 import { formatCompactUsd, formatTokenQuantity } from "../../lib/market-format";
 import { captureWalletError } from "../../lib/monitoring";
+import { trackProtocolAction } from "../../lib/analytics";
 import { TransactionState, TransactionStatus } from "../earn/TransactionStatus";
 
 function toTransactionState(status: "idle" | "pending" | "success" | "error"): TransactionState {
@@ -69,6 +70,7 @@ function RepayModalContent({ position, onClose }: RepayModalContentProps) {
     try {
       await mutation.mutateAsync({ symbol: position.symbol, amount: amountRaw, signer: address });
       toast.success("Repayment successful");
+      trackProtocolAction("repay", { symbol: position.symbol, walletType: walletId });
     } catch (error) {
       toast.error("Repayment failed");
       captureWalletError(error, { walletType: walletId, action: "repay", network });
