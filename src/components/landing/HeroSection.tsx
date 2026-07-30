@@ -6,7 +6,7 @@ import Image from 'next/image';
 
 const HeroSection = () => {
   return (
-    <section className="relative min-h-screen pt-[88px] pb-20 flex flex-col items-center justify-center overflow-hidden bg-[#050505]">
+    <section className="relative min-h-screen pt-[88px] pb-20 flex flex-col items-center justify-center overflow-hidden">
       
       <div className="relative max-w-7xl mx-auto px-6 w-full flex items-center justify-center">
         
