@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref to avoid wasting CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  detect:
+    name: Detect package manager
+    runs-on: ubuntu-latest
+    outputs:
+      manager: ${{ steps.detect.outputs.manager }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect package manager from lockfiles
+        id: detect
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "yarn.lock" ]; then
+            echo "manager=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lockfile found (expected pnpm-lock.yaml, yarn.lock, or package-lock.json) at repository root." >&2
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend (SDK, build, tests)
+    needs: detect
+    runs-on: ubuntu-latest
+    env:
+      PM: ${{ needs.detect.outputs.manager }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: ${{ env.PM }}
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'packages/**/*.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml') }}-
+
+      - name: Install dependencies
+        run: |
+          case "$PM" in
+            npm) npm ci ;;
+            yarn) yarn install --frozen-lockfile ;;
+            pnpm)
+              corepack enable
+              pnpm install --frozen-lockfile
+              ;;
+          esac
+
+      - name: Build SDK
+        run: |
+          set -e
+          shopt -s nullglob
+          found=0
+          for manifest in packages/sdk/bindings/*/package.json packages/sdk/package.json; do
+            [ -f "$manifest" ] || continue
+            dir=$(dirname "$manifest")
+            if node -e "process.exit(require('./$manifest').scripts && require('./$manifest').scripts.build ? 0 : 1)"; then
+              found=1
+              echo "Building SDK package: $dir"
+              (
+                cd "$dir"
+                case "$PM" in
+                  npm) npm install ;;
+                  yarn) yarn install ;;
+                  pnpm) pnpm install ;;
+                esac
+                case "$PM" in
+                  npm) npm run build ;;
+                  yarn) yarn build ;;
+                  pnpm) pnpm build ;;
+                esac
+              )
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No SDK package with a build script was found under packages/sdk; skipping."
+          fi
+
+      - name: Build frontend
+        run: |
+          case "$PM" in
+            npm) npm run build ;;
+            yarn) yarn build ;;
+            pnpm) pnpm build ;;
+          esac
+
+      - name: Run frontend tests
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)"; then
+            case "$PM" in
+              npm) npm test ;;
+              yarn) yarn test ;;
+              pnpm) pnpm test ;;
+            esac
+          else
+            echo "No \"test\" script defined in package.json; skipping frontend tests."
+          fi
+
+  contracts:
+    name: Rust contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/*/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/*/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run Rust contract tests
+        run: |
+          set -e
+          shopt -s nullglob
+          manifests=(contracts/*/Cargo.toml)
+          if [ "${#manifests[@]}" -eq 0 ]; then
+            echo "No Cargo.toml manifests found under contracts/." >&2
+            exit 1
+          fi
+          for manifest in "${manifests[@]}"; do
+            echo "Testing $manifest"
+            cargo test --manifest-path "$manifest"
+          done
