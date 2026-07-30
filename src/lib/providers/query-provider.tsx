@@ -2,6 +2,13 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { useEventSubscription } from "../../hooks/useEventSubscription";
+
+/** Mounted once inside QueryClientProvider so it can reach the QueryClient via context. */
+function EventSubscriptionBridge() {
+  useEventSubscription();
+  return null;
+}
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -16,5 +23,10 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       })
   );
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <EventSubscriptionBridge />
+      {children}
+    </QueryClientProvider>
+  );
 }

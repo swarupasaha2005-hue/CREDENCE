@@ -5,13 +5,10 @@ import { SupplyService } from "../lib/services/supply-service";
 import { SUPPLY_ASSETS_QUERY_KEY, SUPPLY_POSITIONS_QUERY_KEY } from "./protocol-query-keys";
 import { useProtocolMutationSuccess } from "./useProtocolMutationSuccess";
 
-const POLL_INTERVAL_MS = 30_000;
-
 export function useSupplyAssets(user: string) {
   const query = useQuery({
     queryKey: [...SUPPLY_ASSETS_QUERY_KEY, user],
     queryFn: () => SupplyService.getSupplyAssets(user),
-    refetchInterval: POLL_INTERVAL_MS,
   });
 
   return {

@@ -9,8 +9,6 @@ import {
 } from "./protocol-query-keys";
 import { useProtocolMutationSuccess } from "./useProtocolMutationSuccess";
 
-const POLL_INTERVAL_MS = 30_000;
-
 export function useBorrowPositions(user: string) {
   const query = useQuery({
     queryKey: [...BORROW_POSITIONS_QUERY_KEY, user],
@@ -30,7 +28,6 @@ export function useBorrowableAssets(user: string) {
   const query = useQuery({
     queryKey: [...BORROWABLE_ASSETS_QUERY_KEY, user],
     queryFn: () => BorrowService.getBorrowableAssets(user),
-    refetchInterval: POLL_INTERVAL_MS,
   });
 
   return {

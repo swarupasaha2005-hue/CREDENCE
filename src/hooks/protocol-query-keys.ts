@@ -11,6 +11,7 @@ export const SUPPLY_POSITIONS_QUERY_KEY = ["supply-positions"] as const;
 export const BORROW_POSITIONS_QUERY_KEY = ["borrow-positions"] as const;
 export const BORROWABLE_ASSETS_QUERY_KEY = ["borrowable-assets"] as const;
 export const BORROW_SNAPSHOT_QUERY_KEY = ["borrow-snapshot"] as const;
+export const TRANSACTION_HISTORY_QUERY_KEY = ["transaction-history"] as const;
 
 const PROTOCOL_QUERY_KEYS = [
   MARKETS_QUERY_KEY,

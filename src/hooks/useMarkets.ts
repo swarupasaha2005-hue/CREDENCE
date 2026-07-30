@@ -4,13 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { MarketService } from "../lib/services/market-service";
 import { MARKETS_QUERY_KEY } from "./protocol-query-keys";
 
-const POLL_INTERVAL_MS = 30_000;
-
 export function useMarkets() {
   const query = useQuery({
     queryKey: MARKETS_QUERY_KEY,
     queryFn: () => MarketService.getMarkets(),
-    refetchInterval: POLL_INTERVAL_MS,
   });
 
   return {
