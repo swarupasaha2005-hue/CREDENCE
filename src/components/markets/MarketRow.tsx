@@ -3,7 +3,7 @@ import { formatCompactUsd, formatUsd } from "../../lib/market-format";
 import { ActionButtons } from "./ActionButtons";
 import { APYBadge } from "./APYBadge";
 import { AssetBadge } from "./AssetBadge";
-import { MarketAction } from "./SupplyBorrowModal";
+import { MarketAction } from "./ActionButtons";
 import { UtilizationBar } from "./UtilizationBar";
 
 interface MarketRowProps {

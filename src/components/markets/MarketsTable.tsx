@@ -1,6 +1,6 @@
 import { RefreshCcw } from "lucide-react";
 import { MarketData } from "../../../packages/interfaces/src";
-import { MarketAction } from "./SupplyBorrowModal";
+import { MarketAction } from "./ActionButtons";
 import { MarketCard } from "./MarketCard";
 import { MarketRow } from "./MarketRow";
 

@@ -2,7 +2,7 @@ import { MarketData } from "../../../packages/interfaces/src";
 import { formatCompactUsd, formatPercent, formatUsd } from "../../lib/market-format";
 import { ActionButtons } from "./ActionButtons";
 import { AssetBadge } from "./AssetBadge";
-import { MarketAction } from "./SupplyBorrowModal";
+import { MarketAction } from "./ActionButtons";
 import { UtilizationBar } from "./UtilizationBar";
 
 interface MarketCardProps {

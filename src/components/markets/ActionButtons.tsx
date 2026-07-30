@@ -1,4 +1,4 @@
-import { MarketAction } from "./SupplyBorrowModal";
+export type MarketAction = "supply" | "borrow";
 
 interface ActionButtonsProps {
   onAction: (action: MarketAction) => void;

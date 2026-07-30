@@ -1,12 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { SupplyService } from "../lib/services/supply-service";
-import {
-  SUPPLY_ASSETS_QUERY_KEY,
-  SUPPLY_POSITIONS_QUERY_KEY,
-  invalidateProtocolQueries,
-} from "./protocol-query-keys";
+import { SUPPLY_ASSETS_QUERY_KEY, SUPPLY_POSITIONS_QUERY_KEY } from "./protocol-query-keys";
+import { useProtocolMutationSuccess } from "./useProtocolMutationSuccess";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -41,21 +38,21 @@ export function useSupplyPositions(user: string) {
 }
 
 export function useSupplyMutation() {
-  const queryClient = useQueryClient();
+  const onProtocolMutationSuccess = useProtocolMutationSuccess();
 
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       SupplyService.supply(symbol, amount, signer),
-    onSuccess: () => invalidateProtocolQueries(queryClient),
+    onSuccess: onProtocolMutationSuccess,
   });
 }
 
 export function useWithdrawMutation() {
-  const queryClient = useQueryClient();
+  const onProtocolMutationSuccess = useProtocolMutationSuccess();
 
   return useMutation({
     mutationFn: ({ symbol, amount, signer }: { symbol: string; amount: bigint; signer: string }) =>
       SupplyService.withdraw(symbol, amount, signer),
-    onSuccess: () => invalidateProtocolQueries(queryClient),
+    onSuccess: onProtocolMutationSuccess,
   });
 }

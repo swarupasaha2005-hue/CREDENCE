@@ -471,6 +471,13 @@ export class CredenceProtocol {
           priceUsd: market?.priceUsd ?? 0,
           suppliedAmount: position.collateral_amount,
           supplyApyBps: market?.supplyApyBps ?? 0,
+          // Intentionally 0n, not an approximation: lending_pool's deposit_collateral/
+          // withdraw_collateral mutate `collateral_amount` by the raw deposited/withdrawn
+          // amount only (contracts/lending_pool/src/lib.rs) with no supply-side index or
+          // scaled-shares mechanism analogous to `scaled_debt`/`BorrowIndex` on the borrow
+          // side. There is no on-chain state distinguishing principal from accrued interest
+          // for suppliers, so any nonzero value here would be fabricated. See the SDK
+          // audit report for the minimal contract views needed to make this real.
           interestEarned: 0n,
         } satisfies SupplyPosition;
       })
