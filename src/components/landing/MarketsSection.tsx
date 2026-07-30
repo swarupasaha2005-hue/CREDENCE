@@ -1,20 +1,16 @@
 "use client"
 import React from 'react';
 import { Button } from '../ui/button';
-
-const markets = [
-  { asset: "USDC", totalSupplied: "$5.25M", totalBorrowed: "$3.21M", supplyApy: "4.35%", borrowApy: "6.71%", util: 68.21 },
-  { asset: "XLM", totalSupplied: "$2.10M", totalBorrowed: "$885.4K", supplyApy: "2.18%", borrowApy: "4.32%", util: 42.17 },
-  { asset: "AQUA", totalSupplied: "$1.52M", totalBorrowed: "$1.16M", supplyApy: "6.24%", borrowApy: "9.18%", util: 76.62 },
-  { asset: "yXLM", totalSupplied: "$1.02M", totalBorrowed: "$564.1K", supplyApy: "5.12%", borrowApy: "7.34%", util: 55.21 },
-  { asset: "BTC.e", totalSupplied: "$953.8K", totalBorrowed: "$298.1K", supplyApy: "1.75%", borrowApy: "3.85%", util: 31.42 },
-];
+import { useMarkets } from '../../hooks/useMarkets';
+import { formatCompactUsd, formatPercent } from '../../lib/market-format';
 
 const MarketsSection = () => {
+  const { markets, isLoading, isError } = useMarkets();
+
   return (
     <section id="markets" className="py-24 bg-gray-50 border-y border-border">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-        
+
         {/* Left Side: Text */}
         <div className="lg:col-span-4">
           <p className="text-xs font-bold tracking-widest text-primary uppercase mb-6">
@@ -45,31 +41,61 @@ const MarketsSection = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {markets.map((market, i) => (
-                <tr key={i} className="group hover:bg-gray-50/50 transition-colors">
-                  <td className="py-5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-dark border border-border">
-                      {market.asset[0]}
-                    </div>
-                    <span className="font-semibold text-dark text-sm">{market.asset}</span>
-                  </td>
-                  <td className="py-5 text-right text-sm text-dark font-medium">{market.totalSupplied}</td>
-                  <td className="py-5 text-right text-sm text-dark font-medium">{market.totalBorrowed}</td>
-                  <td className="py-5 text-right text-sm text-success font-semibold">{market.supplyApy}</td>
-                  <td className="py-5 text-right text-sm text-primary font-semibold">{market.borrowApy}</td>
-                  <td className="py-5 text-right">
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="text-xs font-bold text-dark">{market.util}%</span>
-                      <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary rounded-full" 
-                          style={{ width: `${market.util}%` }}
-                        ></div>
-                      </div>
-                    </div>
+              {isLoading &&
+                Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={6} className="py-5">
+                      <div className="h-5 w-full animate-pulse rounded bg-gray-100" />
+                    </td>
+                  </tr>
+                ))}
+
+              {!isLoading && isError && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-sm text-text-secondary">
+                    Live market data unavailable right now.
                   </td>
                 </tr>
-              ))}
+              )}
+
+              {!isLoading &&
+                !isError &&
+                markets.map((market) => {
+                  const utilPercent = market.utilizationBps / 100;
+                  return (
+                    <tr key={market.symbol} className="group hover:bg-gray-50/50 transition-colors">
+                      <td className="py-5 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-dark border border-border">
+                          {market.symbol[0]}
+                        </div>
+                        <span className="font-semibold text-dark text-sm">{market.symbol}</span>
+                      </td>
+                      <td className="py-5 text-right text-sm text-dark font-medium">
+                        {formatCompactUsd(market.totalSupplied, market.decimals, market.priceUsd)}
+                      </td>
+                      <td className="py-5 text-right text-sm text-dark font-medium">
+                        {formatCompactUsd(market.totalBorrowed, market.decimals, market.priceUsd)}
+                      </td>
+                      <td className="py-5 text-right text-sm text-success font-semibold">
+                        {formatPercent(market.supplyApyBps)}
+                      </td>
+                      <td className="py-5 text-right text-sm text-primary font-semibold">
+                        {formatPercent(market.borrowApyBps)}
+                      </td>
+                      <td className="py-5 text-right">
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="text-xs font-bold text-dark">{utilPercent.toFixed(2)}%</span>
+                          <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full"
+                              style={{ width: `${Math.min(100, utilPercent)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
