@@ -10,24 +10,32 @@ Supply. Borrow. Earn. All backed by live smart contracts on Stellar — no mocks
 
 <br />
 
-[![Build](https://img.shields.io/badge/build-passing-2ea44f?style=for-the-badge&logo=vercel&logoColor=white)](https://credence-stellar.vercel.app)
+[![Build](https://img.shields.io/badge/build-passing-2ea44f?style=for-the-badge&logo=vercel&logoColor=white)](https://credence-sigma.vercel.app)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)](./LICENSE)
 [![Stellar](https://img.shields.io/badge/Stellar-Testnet-7D00FF?style=for-the-badge&logo=stellar&logoColor=white)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-000000?style=for-the-badge)](https://soroban.stellar.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel&logoColor=white)](https://credence-stellar.vercel.app)
-[![Status](https://img.shields.io/badge/status-live%20on%20testnet-brightgreen?style=for-the-badge)](https://credence-stellar.vercel.app)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel&logoColor=white)](https://credence-sigma.vercel.app)
+[![Status](https://img.shields.io/badge/status-live%20on%20testnet-brightgreen?style=for-the-badge)](https://credence-sigma.vercel.app)
 [![Hackathon](https://img.shields.io/badge/built%20for-Stellar%20Hackathon-FFD500?style=for-the-badge)](https://stellar.org)
 
 <br />
 
-**[🚀 Live Demo](https://credence-stellar.vercel.app)** &nbsp;·&nbsp;
+**[🚀 Live Demo](https://credence-sigma.vercel.app)** &nbsp;·&nbsp;
 **[📖 Documentation](#-table-of-contents)** &nbsp;·&nbsp;
 **[🏗️ Architecture](#️-architecture)** &nbsp;·&nbsp;
 **[📜 Smart Contracts](#-smart-contracts)**
 
 </div>
+
+<br />
+
+## 🎥 Demo Video
+
+Watch the complete demonstration here:
+
+https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=sharing
 
 <br />
 
@@ -48,6 +56,7 @@ Supply. Borrow. Earn. All backed by live smart contracts on Stellar — no mocks
 - [Screenshots](#-screenshots)
 - [Local Development](#-local-development)
 - [Deployment](#-deployment)
+- [Testnet User Verification](#-testnet-user-verification)
 - [Known Limitations](#️-known-limitations)
 - [CI](#️-ci)
 - [Roadmap](#️-roadmap)
@@ -512,6 +521,48 @@ npm run start
 
 ---
 
+## 🧪 Testnet User Verification
+
+To demonstrate multi-user protocol validation on Stellar Testnet, Credence includes a
+deterministic onboarding script that:
+
+- Generates **10+ unique Stellar Testnet wallets**.
+- Funds every wallet through **Friendbot**.
+- Executes **real Supply / Withdraw / Borrow / Repay transactions** against the deployed
+  contracts (`registry/deployments.json`) — the same `CredenceProtocol` SDK the frontend
+  uses, not a mock.
+- Records every transaction hash, wallet address, action, and timestamp.
+
+This is hackathon verification tooling, not part of the app itself — it proves the deployed
+protocol genuinely accepts interactions from independent accounts, not just one dev wallet.
+
+> [!NOTE]
+> USDC and AQUA are classic Stellar assets wrapped as Soroban Asset Contracts; minting a
+> testnet balance of either requires the issuing account's secret key, which this script
+> does not have (and does not fabricate). Steps that request USDC/AQUA execute against XLM
+> instead, with both the requested and executed asset recorded per-transaction — every
+> recorded transaction is a real, successful, on-chain interaction.
+
+**Script:** [`scripts/create-testnet-users.ts`](scripts/create-testnet-users.ts)
+
+**Re-run it:**
+
+```bash
+npm run testnet:onboard
+```
+
+Re-running is idempotent — wallets and transactions already recorded in
+`scripts/output/testnet-users.json` are reused rather than duplicated. That output file
+contains generated wallet **secret keys** and is gitignored; it never appears in this repo
+or in the report below.
+
+**Report:** [`docs/testnet-users.md`](docs/testnet-users.md) — wallet table, every
+transaction hash, and a summary of totals from the most recent run.
+
+<br />
+
+---
+
 ## ⚠️ Known Limitations
 
 > [!IMPORTANT]
@@ -595,6 +646,6 @@ Credence is released under the [MIT License](./LICENSE).
 
 **Built on Stellar. Secured by Soroban.**
 
-[Live Demo](https://credence-stellar.vercel.app) · [Report an Issue](https://github.com/swarupasaha2005-hue/CREDENCE/issues)
+[Live Demo](https://credence-sigma.vercel.app) · [Report an Issue](https://github.com/swarupasaha2005-hue/CREDENCE/issues)
 
 </div>

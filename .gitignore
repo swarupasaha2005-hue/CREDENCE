@@ -42,3 +42,6 @@ target/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# testnet onboarding script output -- contains generated wallet secret keys
+/scripts/output/
