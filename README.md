@@ -49,6 +49,7 @@ Supply. Borrow. Earn. All backed by live smart contracts on Stellar — no mocks
 - [Local Development](#-local-development)
 - [Deployment](#-deployment)
 - [Known Limitations](#️-known-limitations)
+- [CI](#️-ci)
 - [Roadmap](#️-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -522,6 +523,33 @@ npm run start
 - **Three supported assets.** XLM, USDC, and AQUA are the only markets live on Testnet today.
 - **xBull is not wired up, and it's not a placeholder gap — it's a real SDK constraint.** The only published xBull package (`@creit.tech/xbull-wallet-connect`) communicates via `window.webkit.messageHandlers`, a Cordova/WKWebView bridge that only exists inside xBull's own mobile in-app browser. It throws in any normal desktop browser, extension or not, so it cannot back a website's "Connect Wallet" button. [Albedo](https://albedo.link/) was implemented instead — a maintained, zero-dependency, popup-based wallet with an official npm SDK (`@albedo-link/intent`) that genuinely works from any browser.
 - **Albedo has no passive reconnect.** Unlike Freighter, Albedo has no persisted-session API — every connection is a fresh, user-approved popup. Reloading the page will not silently restore an Albedo session (Freighter sessions do restore, when previously granted). This is reflected honestly in the UI rather than faking a session Albedo can't actually confirm.
+- **Rust contract tests currently fail to compile in CI — a known upstream dependency issue, not a bug in these contracts.** See [CI](#-ci) below.
+
+<br />
+
+---
+
+## ⚙️ CI
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+| Job | What it does | Required? |
+|---|---|---|
+| `detect` | Detects the package manager from the committed lockfile (`package-lock.json` today; `yarn.lock`/`pnpm-lock.yaml` supported if the repo switches). | Yes |
+| `frontend` | Installs dependencies, builds the SDK bindings under `packages/sdk/bindings/*`, runs `npm run build` (`next build`), and runs the frontend test script if one is defined in `package.json`. | Yes |
+| `contracts` | Runs `cargo test` for every contract under `contracts/*`. | **No — `continue-on-error: true`** |
+
+> [!WARNING]
+> **Rust contract tests fail to compile, and this is expected for now.** The `contracts` job is intentionally non-blocking (`continue-on-error: true`) so this stays visible in the Actions UI (as a warning annotation and a non-green job) instead of being hidden, while it doesn't block merges on a bug this repo doesn't control.
+>
+> **Root cause:** `soroban-sdk 22.0.11` — the newest release in the `22.x` line, and the version every contract here is pinned to — hard-pins `soroban-env-host = "=22.1.3"`. That version of `soroban-env-host` declares an open-ended `ed25519-dalek = ">=2.0.0"` constraint, so Cargo resolves `ed25519-dalek 3.0.0` (and with it, `rand_core 0.10.x`) for it. Elsewhere in the same dependency graph, a `ChaCha20Rng` is built from `rand_chacha 0.3.1`, which is based on the incompatible, older `rand_core 0.6.x`. Since `rand_core 0.6` and `0.10` are different major versions, `ChaCha20Rng` doesn't implement the `CryptoRng` trait `ed25519-dalek 3.0.0`'s `SigningKey::generate` expects, and `soroban-env-host`'s own `testutils.rs` fails to compile with:
+>   ```
+>   error[E0277]: the trait bound `ChaCha20Rng: ed25519_dalek::rand_core::CryptoRng` is not satisfied
+>   ```
+> - **Not fixable by relocking or pinning:** `22.0.11` is already the newest `22.x` `soroban-sdk` release, and it hard-pins the broken `soroban-env-host` version exactly — there's no compatible combination reachable within `22.x`.
+> - **Not fixable by pinning an older Rust toolchain:** this is a trait-bound/dependency-resolution conflict, not a compiler-version issue; it reproduces identically on the latest stable Rust everywhere it's been tried.
+> - **The real fix** — bumping `soroban-sdk` past `22.x` in every contract's `Cargo.toml` — is a deliberate decision this repo hasn't made yet, since it needs API-compatibility review against contract source (the SDK's public API has moved across major versions) and is out of scope for a CI-only change.
+> - **Upstream tracking:** [stellar/rs-soroban-env#1705](https://github.com/stellar/rs-soroban-env/issues/1705) — "Fresh SDK 27 testutils lock resolves incompatible ed25519-dalek 3." The same open-ended `ed25519-dalek` constraint is confirmed still present upstream, and affects `soroban-sdk 27.x` too, not just `22.x`.
 
 <br />
 
