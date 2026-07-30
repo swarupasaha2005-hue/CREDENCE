@@ -125,8 +125,8 @@ Per-asset LTV and liquidation thresholds, enforced at the contract level — the
 </td>
 <td width="33%" valign="top">
 
-### 🔗 Wallet Integration
-Native [Freighter](https://www.freighter.app/) support for connecting, signing, and submitting real Soroban transactions.
+### 🔗 Multi-Wallet Support
+Connect with [Freighter](https://www.freighter.app/) or [Albedo](https://albedo.link/) through a shared wallet-adapter interface — pick a wallet once, reconnect automatically, sign real Soroban transactions with either.
 
 </td>
 <td width="33%" valign="top">
@@ -184,11 +184,35 @@ flowchart TD
 
 React Query wraps every hook — polling, caching, and invalidation all live at the hook layer, so services and the SDK stay pure data-access code with no UI concerns.
 
+### Wallet Adapter Layer
+
+Wallet support is pluggable. `WalletContext` never talks to a wallet SDK directly — it goes through a common `WalletAdapter` interface, so adding a new wallet means writing one adapter file, not touching the context, the SDK, or any page.
+
+```mermaid
+flowchart TD
+    C["🪝 WalletContext"] --> A["🔌 WalletAdapter interface — connect, signTransaction, getNetwork, isConnected"]
+    A --> FA["🦊 FreighterAdapter"]
+    A --> AA["🌌 AlbedoAdapter"]
+    FA --> FE["Freighter Browser Extension"]
+    AA --> AL["Albedo Secure Popup"]
+    C --> SDK["📦 CredenceProtocol.setSigner()"]
+
+    style C fill:#6D63FF,color:#fff,stroke:none
+    style A fill:#17152F,color:#fff,stroke:none
+    style FA fill:#A99DFF,color:#111,stroke:none
+    style AA fill:#A99DFF,color:#111,stroke:none
+    style FE fill:#050505,color:#fff,stroke:none
+    style AL fill:#050505,color:#fff,stroke:none
+    style SDK fill:#E88DAF,color:#111,stroke:none
+```
+
+The active adapter's `signTransaction` is injected into the SDK via `setSigner()` — the SDK itself never imports a wallet package, so every write operation (supply, borrow, repay, withdraw) works identically no matter which wallet is connected.
+
 ### Protocol Architecture
 
 ```mermaid
 flowchart TD
-    W["👛 Freighter Wallet"] --> F["🖥️ Frontend — Next.js App Router"]
+    W["👛 Freighter or Albedo"] --> F["🖥️ Frontend — Next.js App Router"]
     F --> S["📦 CredenceProtocol SDK"]
 
     S --> LP["🏦 Lending Pool"]
@@ -245,11 +269,15 @@ credence/
 │   │   ├── earn/                     # Supply / Earn
 │   │   ├── borrow/                   # Borrow
 │   │   └── dashboard/                # Wallet dashboard
-│   ├── components/                 # UI components, grouped by domain
-│   ├── context/                    # WalletContext (Freighter session state)
+│   ├── components/
+│   │   ├── wallet/                     # WalletSelectorModal (multi-wallet picker)
+│   │   └── ...                         # Landing / Markets / Earn / Borrow UI, grouped by domain
+│   ├── context/                    # WalletContext — wallet-agnostic session state
 │   ├── hooks/                      # React Query hooks — one per protocol concern
 │   └── lib/
-│       ├── services/                 # Data-access layer between hooks and the SDK
+│       ├── services/
+│       │   ├── wallet-adapters/          # WalletAdapter interface + FreighterAdapter + AlbedoAdapter
+│       │   └── wallet-service.ts         # Wallet-agnostic Stellar plumbing (balances, tx submission)
 │       ├── protocol.ts               # Singleton CredenceProtocol instance
 │       └── *-aggregates.ts           # Pure client-side math over live protocol data
 │
@@ -270,7 +298,7 @@ credence/
 <tr><td><strong>Frontend</strong></td><td>Next.js 16 (App Router), React 19, Tailwind CSS 4, Framer Motion</td></tr>
 <tr><td><strong>Data Layer</strong></td><td>TanStack React Query — single global cache, polling, mutation invalidation</td></tr>
 <tr><td><strong>Blockchain</strong></td><td>Stellar Testnet, Soroban smart contracts (Rust), <code>@stellar/stellar-sdk</code></td></tr>
-<tr><td><strong>Wallet</strong></td><td>Freighter (<code>@stellar/freighter-api</code>)</td></tr>
+<tr><td><strong>Wallet</strong></td><td>Freighter (<code>@stellar/freighter-api</code>) &amp; Albedo (<code>@albedo-link/intent</code>) via a shared wallet-adapter interface</td></tr>
 <tr><td><strong>Smart Contracts</strong></td><td>Rust, <code>soroban-sdk</code>, WASM (<code>wasm32v1-none</code>)</td></tr>
 <tr><td><strong>Deployment</strong></td><td>Vercel (frontend), Stellar Testnet + <code>stellar-cli</code> (contracts)</td></tr>
 <tr><td><strong>Languages</strong></td><td>TypeScript, Rust</td></tr>
@@ -379,27 +407,48 @@ flowchart TD
 
 ## 🖼️ Screenshots
 
-<div align="center">
+### Landing Page
 
-| Landing Page | Dashboard |
-|:---:|:---:|
-| _Hero, live protocol stats, and supported markets_ | _Wallet balance, positions, and net protocol exposure_ |
-| `docs/screenshots/landing.png` | `docs/screenshots/dashboard.png` |
+Hero section and supported markets, connected to a live Testnet wallet.
 
-| Markets | Supply |
-|:---:|:---:|
-| _Live TVL, APYs, and utilization per asset_ | _Deposit flow with real-time balance and APY preview_ |
-| `docs/screenshots/markets.png` | `docs/screenshots/supply.png` |
+<p align="center">
+  <img src="public/images/dashboardss.png" alt="Credence Landing Page" width="100%">
+</p>
 
-| Borrow | Mobile |
-|:---:|:---:|
-| _Health factor preview before confirming a borrow_ | _Fully responsive across all core pages_ |
-| `docs/screenshots/borrow.png` | `docs/screenshots/mobile.png` |
+---
 
-</div>
+### Markets
+
+Live TVL, total borrowed, available liquidity, and per-asset APY/utilization — all read directly from the deployed contracts.
+
+<p align="center">
+  <img src="public/images/marketss.png" alt="Credence Markets" width="100%">
+</p>
+
+---
+
+### Earn
+
+Supply positions, wallet balances, and available assets with real-time APY previews.
+
+<p align="center">
+  <img src="public/images/earnss.png" alt="Credence Earn" width="100%">
+</p>
+
+---
+
+### Borrow
+
+Health factor, liquidation threshold, and borrow positions, all computed live from oracle prices and pool state.
+
+<p align="center">
+  <img src="public/images/borrowss.png" alt="Credence Borrow" width="100%">
+</p>
+
+<br />
 
 > [!TIP]
-> Screenshots are referenced from `docs/screenshots/` — drop your own captures there using the filenames above and they'll render automatically.
+> Dashboard, mobile, and wallet-selector captures aren't in yet — drop them in `public/images/` and reference them here the same way.
 
 <br />
 
@@ -412,7 +461,9 @@ flowchart TD
 - [Node.js](https://nodejs.org/) 20+
 - [Rust](https://www.rust-lang.org/) + `wasm32v1-none` target (only needed if you're modifying contracts)
 - [Stellar CLI](https://developers.stellar.org/docs/tools/cli/stellar-cli) (`stellar --version`)
-- [Freighter Wallet](https://www.freighter.app/) browser extension, set to **Testnet**
+- A supported wallet, set to **Testnet** — pick one:
+  - [Freighter](https://www.freighter.app/) browser extension, **or**
+  - [Albedo](https://albedo.link/) — no install required, it signs through a secure popup window in any browser
 
 ### Setup
 
@@ -454,7 +505,7 @@ npm run start
 |---|---|---|
 | **Frontend** | [Vercel](https://vercel.com) | Deployed from this repo, zero required environment variables — all contract addresses are committed config, not secrets |
 | **Smart Contracts** | [Soroban](https://soroban.stellar.org) on **Stellar Testnet** | Deployed via `stellar contract deploy`; addresses recorded in `registry/deployments.json` |
-| **Wallet** | [Freighter](https://www.freighter.app/) | Required to sign supply/borrow/repay/withdraw transactions; must be set to Testnet |
+| **Wallet** | [Freighter](https://www.freighter.app/) or [Albedo](https://albedo.link/) | Required to sign supply/borrow/repay/withdraw transactions; must be set to Testnet. No setup needed for Albedo beyond a browser — it has no extension to install. |
 
 <br />
 
@@ -469,6 +520,8 @@ npm run start
 - **No governance layer.** Risk parameters (LTV, liquidation threshold, reserve factor) are admin-set on the `configuration` contract; there is no on-chain voting mechanism yet.
 - **Liquidations are contract-ready, UI-pending.** The `liquidation_engine` contract is deployed and callable, but there is no dedicated liquidation interface in the frontend yet.
 - **Three supported assets.** XLM, USDC, and AQUA are the only markets live on Testnet today.
+- **xBull is not wired up, and it's not a placeholder gap — it's a real SDK constraint.** The only published xBull package (`@creit.tech/xbull-wallet-connect`) communicates via `window.webkit.messageHandlers`, a Cordova/WKWebView bridge that only exists inside xBull's own mobile in-app browser. It throws in any normal desktop browser, extension or not, so it cannot back a website's "Connect Wallet" button. [Albedo](https://albedo.link/) was implemented instead — a maintained, zero-dependency, popup-based wallet with an official npm SDK (`@albedo-link/intent`) that genuinely works from any browser.
+- **Albedo has no passive reconnect.** Unlike Freighter, Albedo has no persisted-session API — every connection is a fresh, user-approved popup. Reloading the page will not silently restore an Albedo session (Freighter sessions do restore, when previously granted). This is reflected honestly in the UI rather than faking a session Albedo can't actually confirm.
 
 <br />
 
@@ -482,6 +535,7 @@ npm run start
 - [x] **Dynamic Interest Rates** — utilization-based borrow APY curve
 - [x] **Live Protocol Integration** — every page reads from deployed contracts, zero mocked data
 - [x] **Production Deployment** — live on Vercel + Stellar Testnet
+- [x] **Multi-Wallet Support** — Freighter and Albedo behind a shared wallet-adapter interface
 - [ ] 🚧 **Liquidation UI** — dedicated interface for the already-deployed `liquidation_engine`
 - [ ] 🚧 **Supply Interest Accrual** — supply-side index in `lending_pool` + `interest_rate_model`
 - [ ] 🚧 **Governance** — on-chain parameter voting

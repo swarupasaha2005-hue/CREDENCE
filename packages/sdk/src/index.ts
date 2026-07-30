@@ -1,5 +1,4 @@
 import { Client as ContractClient } from "@stellar/stellar-sdk/contract";
-import { signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
 import {
   UserPosition,
   RiskParameters,
@@ -46,6 +45,16 @@ function toNumber(scaled: bigint, decimals: number): number {
 }
 
 /**
+ * Signs a transaction XDR for a given address and returns the signed XDR. Provided by
+ * whichever wallet is currently connected (see `CredenceProtocol.setSigner`) -- the SDK
+ * itself never imports a wallet package, so it works identically across all wallets.
+ */
+export type TransactionSigner = (
+  xdr: string,
+  opts: { networkPassphrase: string; address: string }
+) => Promise<string>;
+
+/**
  * High-level SDK for interacting with the Credence Protocol.
  * Wraps the real Soroban contracts deployed on the configured network via
  * the generic `@stellar/stellar-sdk/contract` Client (the same mechanism
@@ -59,6 +68,7 @@ export class CredenceProtocol {
   private networkPassphrase: string;
   private assets: AssetEntry[];
   private clientCache: Map<string, Promise<ContractClient>> = new Map();
+  private signer: TransactionSigner | null = null;
 
   constructor(network: string, registry: Record<string, string>) {
     this.registry = registry as Registry;
@@ -73,6 +83,15 @@ export class CredenceProtocol {
       assetAddress: a.assetAddress,
       decimals: a.decimals,
     }));
+  }
+
+  /**
+   * Wires up the active wallet's signing function. Called by WalletContext whenever the
+   * connected wallet changes (or cleared on disconnect) -- this is the only point where
+   * the SDK becomes aware a wallet exists at all.
+   */
+  public setSigner(signer: TransactionSigner | null): void {
+    this.signer = signer;
   }
 
   // --- Internal helpers ---------------------------------------------------
@@ -144,13 +163,18 @@ export class CredenceProtocol {
     return tx.result as T;
   }
 
-  /** Signs (via Freighter) and submits a write transaction, returning the tx hash. */
+  /** Signs (via whichever wallet is currently connected) and submits a write transaction. */
   private async writeCall(
     client: ContractClient,
     method: string,
     args: Record<string, unknown>,
     signer: string
   ): Promise<string> {
+    if (!this.signer) {
+      throw new Error("No wallet connected -- cannot sign transaction.");
+    }
+    const sign = this.signer;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fn = (client as any)[method];
     if (typeof fn !== "function") throw new Error(`Method ${method} not found on contract client`);
@@ -158,11 +182,10 @@ export class CredenceProtocol {
     const assembled = await fn(args, { simulate: true });
     const sent = await assembled.signAndSend({
       signTransaction: async (xdr: string, opts?: { networkPassphrase?: string }) => {
-        const { signedTxXdr, error } = await freighterSignTransaction(xdr, {
+        const signedTxXdr = await sign(xdr, {
           networkPassphrase: opts?.networkPassphrase ?? this.networkPassphrase,
           address: signer,
         });
-        if (error) throw new Error("Transaction signing was rejected");
         return { signedTxXdr, signerAddress: signer };
       },
     });

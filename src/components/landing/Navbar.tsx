@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Activity, X, Copy, RefreshCw, LogOut } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
+import { WalletSelectorModal } from '../wallet/WalletSelectorModal';
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
@@ -18,6 +19,7 @@ const Navbar = () => {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
+  const [isWalletSelectorOpen, setIsWalletSelectorOpen] = useState(false);
   const walletMenuRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -25,10 +27,10 @@ const Navbar = () => {
     connecting,
     shortAddress,
     network,
-    connect,
     disconnect,
     refreshBalances,
     address,
+    walletName,
   } = useWallet();
 
   useEffect(() => {
@@ -55,7 +57,7 @@ const Navbar = () => {
     if (connected) {
       setIsWalletMenuOpen((open) => !open);
     } else {
-      connect();
+      setIsWalletSelectorOpen(true);
     }
   };
 
@@ -66,7 +68,7 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#050505] h-[88px]">
       {/* 3-column Grid Layout for Desktop, 2-column for Mobile */}
-      <div className="h-full px-6 md:px-8 lg:px-[48px] grid grid-cols-2 md:grid-cols-[1.25fr_auto_0.9fr] items-center">
+      <div className="h-full px-6 md:px-8 lg:px-[48px] grid grid-cols-2 md:grid-cols-[1.9fr_auto_1fr] items-center">
         
         {/* Left Column - Branding */}
         <div className="flex items-center justify-start">
@@ -103,7 +105,7 @@ const Navbar = () => {
         </div>
 
         {/* Center Column - Navigation */}
-        <div className="hidden md:flex items-center justify-center gap-[40px]">
+        <div className="hidden md:flex items-center justify-center gap-[48px]">
           {NAV_ITEMS.map(({ label, href }) => {
             const isActive = pathname === href || pathname?.startsWith(`${href}/`);
 
@@ -155,7 +157,9 @@ const Navbar = () => {
                 className="absolute right-0 mt-3 w-64 rounded-2xl bg-[#0A0A0A] border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-2 z-50"
               >
                 <div className="px-3 py-2.5 border-b border-white/[0.06] mb-1">
-                  <p className="text-[11px] uppercase tracking-wide text-[#B7B7B7] mb-1">Wallet Address</p>
+                  <p className="text-[11px] uppercase tracking-wide text-[#B7B7B7] mb-1">
+                    Connected via {walletName ?? "Wallet"}
+                  </p>
                   <p className="font-mono text-sm text-white/[0.88]">{shortAddress}</p>
                 </div>
                 <div className="px-3 py-2 flex items-center gap-2 text-xs text-[#B7B7B7]">
@@ -235,6 +239,8 @@ const Navbar = () => {
           })}
         </div>
       )}
+
+      <WalletSelectorModal open={isWalletSelectorOpen} onClose={() => setIsWalletSelectorOpen(false)} />
     </nav>
   );
 };

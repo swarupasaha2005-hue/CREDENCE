@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { address, balance, network, disconnectWallet, refreshBalance, sendXlm } = useStellar();
+  const { address, balance, network, disconnectWallet, refreshBalance, sendXlm, walletName } = useStellar();
   const router = useRouter();
 
   const [recipient, setRecipient] = useState("");
@@ -101,7 +101,7 @@ export default function Dashboard() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none" />
             <h2 className="text-sm font-medium text-foreground/60 uppercase tracking-wider mb-4 flex items-center space-x-2">
               <Wallet className="w-4 h-4" />
-              <span>Wallet connected</span>
+              <span>Connected via {walletName ?? "Wallet"}</span>
             </h2>
             
             <div className="flex items-center justify-between bg-surface-2/50 border border-surface-2 rounded-xl p-4 mb-4">

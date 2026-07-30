@@ -5,9 +5,9 @@ import Image from 'next/image';
 
 const Footer = () => {
   return (
-    <footer className="border-t border-white/[0.06] pt-20 pb-10">
+    <footer className="border-t border-white/[0.06] pt-16 pb-6">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-12 mb-10">
           
           {/* Logo & Description */}
           <div className="md:col-span-2">
@@ -87,7 +87,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-white/[0.06]">
+        <div className="flex flex-col md:flex-row items-start justify-start pt-5 border-t border-white/[0.06]">
           <p className="text-xs text-white/[0.65] font-light">© 2026 Credence. All rights reserved.</p>
         </div>
       </div>
