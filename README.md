@@ -49,6 +49,7 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Why Credence](#-why-credence)
 - [Features](#-features)
 - [Architecture](#️-architecture)
+- [Smart Contract Integration](#-smart-contract-integration)
 - [Project Structure](#-project-structure)
 - [Tech Stack](#-tech-stack)
 - [Smart Contracts](#-smart-contracts)
@@ -56,6 +57,7 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Screenshots](#-screenshots)
 - [Local Development](#-local-development)
 - [Deployment](#-deployment)
+- [Deployment Pipeline](#-deployment-pipeline)
 - [Testnet User Verification](#-testnet-user-verification)
 - [User Feedback](#-user-feedback)
 - [Known Limitations](#️-known-limitations)
@@ -252,6 +254,84 @@ flowchart TD
 ```
 
 `Configuration` is the hub every other contract reads from — LTV, liquidation thresholds, and contract addresses are all resolved through it, so risk parameters can be updated in one place without redeploying the pool.
+
+<br />
+
+---
+
+## 🔗 Smart Contract Integration
+
+This section exists purely as a discoverability anchor for the integration already
+diagrammed above in [Architecture](#️-architecture) — the code itself is not duplicated
+or re-implemented here, only indexed.
+
+**Path from a click to a contract call:**
+
+```
+React Components (src/app/**/page.tsx, src/components/**)
+        ↓
+Hooks (src/hooks/useMarkets.ts, useSupply.ts, useBorrow.ts, useTransactionHistory.ts, useEventSubscription.ts)
+        ↓
+Services (src/lib/services/market-service.ts, supply-service.ts, borrow-service.ts, event-service.ts, wallet-service.ts)
+        ↓
+Protocol SDK (packages/sdk/src/index.ts — CredenceProtocol, built on @stellar/stellar-sdk/contract)
+        ↓
+Generated Soroban bindings (packages/sdk/bindings/{configuration,oracle,interest_rate,lending_pool,treasury,liquidation_engine})
+        ↓
+Deployed contract addresses (registry/deployments.json)
+        ↓
+Soroban Contracts (contracts/*/src/lib.rs) on Stellar Testnet
+```
+
+`src/lib/protocol.ts` instantiates the single shared `CredenceProtocol` client from
+`registry/deployments.json`; every service imports that instance, and every hook imports a
+service — components never import the SDK or `@stellar/stellar-sdk` directly.
+
+**Per-contract entry points** — every deployed contract has at least one live frontend caller:
+
+| Contract | SDK methods (`packages/sdk/src/index.ts`) | Reached via |
+|---|---|---|
+| 🏦 Lending Pool | `depositCollateral`, `borrow`, `repay`, `withdrawCollateral`, `getUserPosition`, `getPoolStats` | `useSupply`, `useBorrow` → `SupplyService`, `BorrowService` |
+| 🔮 Oracle | `getAssetPriceUsd` (internal), `get_price` reads inside `getMarkets`/`getBorrowSnapshot` | `useMarkets`, `useBorrow` → `MarketService`, `BorrowService` |
+| 📈 Interest Rate Model | `get_utilization_rate`, `get_borrow_rate`, `get_supply_rate`, `get_borrow_index` reads inside `getMarkets`/`getBorrowPositions` | `useMarkets`, `useBorrow` → `MarketService`, `BorrowService` |
+| ⚙️ Configuration | `getRiskParameters`, `get_ltv` reads inside `getMarkets`/`getBorrowSnapshot` | `useMarkets`, `useBorrow` → `MarketService`, `BorrowService` |
+| ⚠️ Liquidation Engine | `liquidate` | `event-service.ts` (liquidation event feed); no dedicated UI form — see function table below |
+| 🏛️ Treasury | — (no direct SDK calls) | Intentionally backend-only; see function table below |
+
+**Public contract function coverage** — every `pub fn` across all six contracts, and whether the frontend reaches it:
+
+| Contract | Function | Frontend path | Notes |
+|---|---|---|---|
+| lending_pool | `deposit_collateral` | ✅ `useSupply` → `SupplyService.supply` → `protocol.supply` | |
+| lending_pool | `borrow` | ✅ `useBorrow` → `BorrowService` → `protocol.borrow` | |
+| lending_pool | `repay` | ✅ `useBorrow` → `BorrowService` → `protocol.repay` | |
+| lending_pool | `withdraw_collateral` | ✅ `useSupply` → `SupplyService.withdraw` → `protocol.withdrawCollateral` | |
+| lending_pool | `get_user_position_view` | ✅ `protocol.getUserPosition` (used by markets/supply/borrow reads) | |
+| lending_pool | `get_pool_state_view` | ✅ `protocol.getMarkets`, `getPoolStats` | |
+| lending_pool | `get_current_borrow_index_view` | Internal only | Not called by frontend; superseded by `interest_rate.get_borrow_index` for display math |
+| lending_pool | `execute_liquidation_burn` | Intentionally internal | Cross-contract call invoked by `liquidation_engine.liquidate`, not user-facing |
+| lending_pool | `initialize` | Intentionally admin/deploy-only | Run once via `scripts/deploy` at contract setup |
+| oracle | `get_price` | ✅ `protocol.getAssetPriceUsd`, `getMarkets` | |
+| oracle | `price_exists` | Internal only | Not currently called by frontend |
+| oracle | `get_last_updated` | Internal only | Not currently called by frontend |
+| oracle | `set_price` | Intentionally admin-only | Price feed updates are an oracle-admin operation, not end-user |
+| oracle | `initialize` / `transfer_admin` / `get_admin` | Intentionally admin/deploy-only | |
+| interest_rate | `get_utilization_rate` | ✅ `protocol.getMarkets` | |
+| interest_rate | `get_borrow_rate` | ✅ `protocol.getMarkets` | |
+| interest_rate | `get_supply_rate` | ✅ `protocol.getMarkets` | |
+| interest_rate | `get_borrow_index` | ✅ `protocol.getPoolStats`, `getBorrowPositions`, `getBorrowSnapshot` | |
+| interest_rate | `get_reserve_rate` | Internal only | Not currently surfaced in the UI |
+| interest_rate | `update_borrow_index` | Intentionally internal | Invoked by `lending_pool` during borrow/repay, not directly by the frontend |
+| interest_rate | `initialize` / `get_last_updated` | Intentionally admin/deploy-only | |
+| configuration | `get_ltv`, `get_liquidation_threshold`, `get_liquidation_bonus`, `get_reserve_factor`, `get_base_borrow_rate`, `get_optimal_utilization`, `get_slope1`, `get_slope2` | ✅ `protocol.getRiskParameters`, `getMarkets` | |
+| configuration | `get_liq_threshold`, `get_liq_bonus` | Internal only | Legacy aliases superseded by the `get_liquidation_*` getters above |
+| configuration | `get_treasury`, `get_oracle`, `get_lending_pool`, `get_interest_model` | Intentionally internal | Address wiring read by other contracts at deploy/init time, not by the UI |
+| configuration | every `set_*`, `transfer_admin`, `get_admin`, `initialize` | Intentionally admin-only | Risk-parameter and wiring changes are protocol-governance operations |
+| treasury | `get_treasury_stats`, `get_balance`, `get_total_deposits`, `get_total_withdrawals` | Not currently called by frontend | No treasury/reserves page exists yet — tracked in [Roadmap](#️-roadmap) |
+| treasury | `deposit`, `withdraw` | Intentionally internal/admin | Reserve-factor sweep and admin withdrawal, not a user action |
+| treasury | `initialize`, `transfer_admin`, `get_admin` | Intentionally admin/deploy-only | |
+| liquidation_engine | `liquidate` | ✅ `protocol.liquidate` (SDK method exposed; surfaced today via the event feed, not a dedicated form) | |
+| liquidation_engine | `initialize` | Intentionally admin/deploy-only | |
 
 <br />
 
@@ -519,6 +599,33 @@ npm run start
 | **Frontend** | [Vercel](https://vercel.com) | Deployed from this repo, zero required environment variables — all contract addresses are committed config, not secrets |
 | **Smart Contracts** | [Soroban](https://soroban.stellar.org) on **Stellar Testnet** | Deployed via `stellar contract deploy`; addresses recorded in `registry/deployments.json` |
 | **Wallet** | [Freighter](https://www.freighter.app/) or [Albedo](https://albedo.link/) | Required to sign supply/borrow/repay/withdraw transactions; must be set to Testnet. No setup needed for Albedo beyond a browser — it has no extension to install. |
+
+<br />
+
+---
+
+## 🚚 Deployment Pipeline
+
+Two separate, additive GitHub Actions workflows handle CI and CD — CI runs on every push/PR and never deploys anything; CD only runs after CI has gone green on `main`.
+
+```mermaid
+flowchart LR
+    P["📝 Push / PR"] --> CI["⚙️ CI — .github/workflows/ci.yml\nbuild + test + contract tests"]
+    CI -->|"success, branch = main"| CD["🚀 CD — .github/workflows/deploy.yml\nvercel build → vercel deploy --prod"]
+    CD --> V["☁️ Vercel Production"]
+
+    style P fill:#17152F,color:#fff,stroke:none
+    style CI fill:#6D63FF,color:#fff,stroke:none
+    style CD fill:#8B7FFF,color:#fff,stroke:none
+    style V fill:#E88DAF,color:#111,stroke:none
+```
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `ci.yml` | Every push and pull request, any branch | Builds the SDK bindings, runs `next build`, runs frontend tests if defined, and runs `cargo test` for every contract under `contracts/*`. See [CI](#️-ci) below for the full breakdown. |
+| `deploy.yml` | `workflow_run` — fires only when `ci.yml` completes with `conclusion: success` on `main` | Installs the Vercel CLI, then runs `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod` against the project already linked in `.vercel/project.json`. |
+
+Deployment reads `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` from **GitHub Actions secrets** (`Settings → Secrets and variables → Actions`) — nothing is hardcoded in the workflow. A failing `vercel build` fails the job and blocks the deploy, exactly like a failing `next build` would locally.
 
 <br />
 
