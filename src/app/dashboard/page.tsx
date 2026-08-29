@@ -76,14 +76,14 @@ export default function Dashboard() {
       <div className="w-full max-w-4xl space-y-8">
         
         {/* Header */}
-        <div className="flex justify-between items-end border-b border-surface-2 pb-6">
+        <div className="flex justify-between items-end border-b border-market-border pb-6">
           <div>
-            <h1 className="text-3xl font-display font-bold tracking-tight">Dashboard</h1>
-            <p className="text-foreground/60 mt-1">Manage your Credence assets</p>
+            <h1 className="text-3xl font-display font-bold tracking-tight text-market-text">Dashboard</h1>
+            <p className="text-market-text-secondary mt-1">Manage your Credence assets</p>
           </div>
-          <button 
+          <button
             onClick={disconnectWallet}
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg hover:bg-surface-2 transition-colors text-sm font-medium text-foreground/80"
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg hover:bg-market-surface-hover transition-colors text-sm font-medium text-market-text-secondary"
           >
             <LogOut className="w-4 h-4" />
             <span>Disconnect</span>
@@ -91,65 +91,65 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
+
           {/* Wallet Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-panel rounded-2xl p-6 relative overflow-hidden"
+            className="rounded-2xl border border-market-border bg-market-surface p-6 relative overflow-hidden"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-[40px] -mr-10 -mt-10 pointer-events-none" />
-            <h2 className="text-sm font-medium text-foreground/60 uppercase tracking-wider mb-4 flex items-center space-x-2">
+            <h2 className="text-sm font-medium text-market-text-muted uppercase tracking-wider mb-4 flex items-center space-x-2">
               <Wallet className="w-4 h-4" />
               <span>Connected via {walletName ?? "Wallet"}</span>
             </h2>
-            
-            <div className="flex items-center justify-between bg-surface-2/50 border border-surface-2 rounded-xl p-4 mb-4">
-              <span className="font-mono text-lg">{formatAddress(address)}</span>
-              <button 
+
+            <div className="flex items-center justify-between bg-market-surface-hover border border-market-border rounded-xl p-4 mb-4">
+              <span className="font-mono text-lg text-market-text">{formatAddress(address)}</span>
+              <button
                 onClick={copyAddress}
-                className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+                className="p-2 hover:bg-market-surface-hover rounded-lg transition-colors"
                 title="Copy Address"
               >
-                <Copy className="w-4 h-4 text-foreground/70" />
+                <Copy className="w-4 h-4 text-market-text-secondary" />
               </button>
             </div>
 
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${network === 'TESTNET' ? 'bg-accent' : 'bg-yellow-500'}`} />
-              <span className="text-sm font-medium text-foreground/80">
+              <span className="text-sm font-medium text-market-text-secondary">
                 {network === 'TESTNET' ? 'Stellar Testnet' : 'Wrong Network (Switch to Testnet)'}
               </span>
             </div>
           </motion.div>
 
           {/* Balance Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="glass-panel rounded-2xl p-6 relative overflow-hidden"
+            className="rounded-2xl border border-market-border bg-market-surface p-6 relative overflow-hidden"
           >
             <div className="flex justify-between items-start mb-6">
-              <h2 className="text-sm font-medium text-foreground/60 uppercase tracking-wider">
+              <h2 className="text-sm font-medium text-market-text-muted uppercase tracking-wider">
                 Available Balance
               </h2>
-              <button 
+              <button
                 onClick={refreshBalance}
-                className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+                className="p-2 hover:bg-market-surface-hover rounded-lg transition-colors"
                 title="Refresh Balance"
               >
-                <RefreshCcw className="w-4 h-4 text-foreground/70" />
+                <RefreshCcw className="w-4 h-4 text-market-text-secondary" />
               </button>
             </div>
-            
+
             <div className="flex items-baseline space-x-2">
               {balance === null ? (
-                <div className="h-10 w-32 bg-surface-2 animate-pulse rounded-lg" />
+                <div className="h-10 w-32 bg-market-surface-hover animate-pulse rounded-lg" />
               ) : (
                 <>
-                  <span className="text-5xl font-display font-bold">{parseFloat(balance).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                  <span className="text-xl text-foreground/60 font-medium">XLM</span>
+                  <span className="text-5xl font-display font-bold text-market-text">{parseFloat(balance).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                  <span className="text-xl text-market-text-secondary font-medium">XLM</span>
                 </>
               )}
             </div>
@@ -158,41 +158,41 @@ export default function Dashboard() {
         </div>
 
         {/* Transfer Section */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass-panel rounded-2xl p-6 md:p-8"
+          className="rounded-2xl border border-market-border bg-market-surface p-6 md:p-8"
         >
-          <h2 className="text-xl font-display font-bold mb-6">Transfer XLM</h2>
+          <h2 className="text-xl font-display font-bold mb-6 text-market-text">Transfer XLM</h2>
           <form onSubmit={handleSend} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/80">Recipient Address</label>
-              <input 
-                type="text" 
+              <label className="text-sm font-medium text-market-text-secondary">Recipient Address</label>
+              <input
+                type="text"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
                 placeholder="G..."
-                className="w-full bg-surface-2/50 border border-surface-2 rounded-xl px-4 py-3 font-mono outline-none focus:border-accent transition-colors"
+                className="w-full bg-market-surface-hover border border-market-border rounded-xl px-4 py-3 font-mono text-market-text outline-none focus:border-accent transition-colors"
                 disabled={isSending}
               />
             </div>
-            
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/80">Amount (XLM)</label>
-              <input 
-                type="number" 
+              <label className="text-sm font-medium text-market-text-secondary">Amount (XLM)</label>
+              <input
+                type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 step="0.0000001"
                 min="0"
-                className="w-full bg-surface-2/50 border border-surface-2 rounded-xl px-4 py-3 font-sans outline-none focus:border-accent transition-colors"
+                className="w-full bg-market-surface-hover border border-market-border rounded-xl px-4 py-3 font-sans text-market-text outline-none focus:border-accent transition-colors"
                 disabled={isSending}
               />
             </div>
 
-            <button 
+            <button
               type="submit"
               disabled={isSending || network !== 'TESTNET'}
               className="w-full flex items-center justify-center space-x-2 bg-foreground text-background py-4 rounded-xl font-medium transition-all hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -211,21 +211,21 @@ export default function Dashboard() {
 
         {/* Recent Transaction */}
         {recentTx && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-panel rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0"
+            className="rounded-2xl border border-market-border bg-market-surface p-6 flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0"
           >
             <div className="flex items-center space-x-4">
               <div className="bg-accent/20 p-3 rounded-full">
                 <CheckCircle2 className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="font-medium text-foreground">Transaction Successful</p>
-                <p className="text-sm text-foreground/60">{recentTx.timestamp.toLocaleTimeString()}</p>
+                <p className="font-medium text-market-text">Transaction Successful</p>
+                <p className="text-sm text-market-text-secondary">{recentTx.timestamp.toLocaleTimeString()}</p>
               </div>
             </div>
-            <a 
+            <a
               href={`https://stellar.expert/explorer/testnet/tx/${recentTx.hash}`}
               target="_blank"
               rel="noopener noreferrer"
