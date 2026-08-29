@@ -37,6 +37,8 @@ Watch the complete demonstration here:
 
 https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=sharing
 
+**[📽️ Presentation Deck (Canva)](https://canva.link/0j2xp3atm2qo66c)**
+
 <br />
 
 > [!NOTE]
