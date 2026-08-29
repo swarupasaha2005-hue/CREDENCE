@@ -24,7 +24,7 @@ import deploymentsJson from "../registry/deployments.json";
 const NETWORK = "testnet";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const FRIENDBOT_URL = "https://friendbot.stellar.org";
-const WALLET_COUNT = 10;
+const WALLET_COUNT = 55;
 
 const OUTPUT_PATH = path.join(__dirname, "output", "testnet-users.json");
 const REPORT_PATH = path.join(__dirname, "..", "docs", "testnet-users.md");
