@@ -771,6 +771,8 @@ or in the report below.
 **Report:** [`docs/testnet-users.md`](docs/testnet-users.md) — wallet table, every
 transaction hash, and a summary of totals from the most recent run.
 
+**Spreadsheet:** [Testnet User Onboarding Evidence (Google Sheets)](https://docs.google.com/spreadsheets/d/1P_PhY5XVoqmDu8Px6ndPIxU3iMYJAoGkHzB-wwu5cdQ/edit?usp=sharing) — the same 55-wallet / 134-transaction dataset above in a paste-ready spreadsheet format.
+
 <br />
 
 ---
