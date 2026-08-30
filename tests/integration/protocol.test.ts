@@ -1,4 +1,5 @@
 import { CredenceProtocol } from "../../packages/sdk/src";
+import deployments from "../../registry/deployments.json";
 // In a real Jest environment, we would use testing accounts and local Soroban sandbox
 
 describe("Credence Protocol End-to-End", () => {
@@ -11,7 +12,7 @@ describe("Credence Protocol End-to-End", () => {
 
   beforeAll(async () => {
     // Load mock registry
-    const registry = require("../../registry/deployments.json")["testnet"];
+    const registry = deployments["testnet"];
     credence = new CredenceProtocol("testnet", registry);
   });
 

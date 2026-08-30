@@ -20,7 +20,7 @@ const UseCasesSection = () => {
               Built for everyone
             </h2>
             <p className="text-sm text-text-secondary leading-relaxed mb-8">
-              Whether you're a lender, borrower or builder, Credence gives you the tools you need.
+              Whether you&apos;re a lender, borrower or builder, Credence gives you the tools you need.
             </p>
             <button className="flex items-center text-primary font-medium hover:text-primary-hover transition-colors text-sm group">
               View all use cases

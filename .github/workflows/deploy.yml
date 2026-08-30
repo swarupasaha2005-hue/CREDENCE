@@ -13,6 +13,11 @@ concurrency:
   group: cd-production
   cancel-in-progress: false
 
+# Least-privilege default: deployment only needs to check out the repo and
+# call out to Vercel with the secrets below; it never writes back to GitHub.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy to Vercel (production)

@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default: CI only reads the repo, it never needs to write
+# anything (no PR comments, no releases, no package publishing).
+permissions:
+  contents: read
+
 defaults:
   run:
     shell: bash
@@ -102,6 +107,14 @@ jobs:
             echo "No SDK package with a build script was found under packages/sdk; skipping."
           fi
 
+      - name: Lint frontend
+        run: |
+          case "$PM" in
+            npm) npm run lint ;;
+            yarn) yarn lint ;;
+            pnpm) pnpm lint ;;
+          esac
+
       - name: Build frontend
         run: |
           case "$PM" in
@@ -123,7 +136,7 @@ jobs:
           fi
 
   contracts:
-    name: Rust contract tests
+    name: Rust contract build & tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -131,6 +144,8 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
 
       - name: Cache Cargo
         uses: actions/cache@v4
@@ -143,7 +158,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run Rust contract tests
+      - name: List contract manifests
+        id: manifests
         run: |
           set -e
           shopt -s nullglob
@@ -152,7 +168,34 @@ jobs:
             echo "No Cargo.toml manifests found under contracts/." >&2
             exit 1
           fi
-          for manifest in "${manifests[@]}"; do
-            echo "Testing $manifest"
+          echo "Found ${#manifests[@]} contract manifest(s): ${manifests[*]}"
+
+      - name: cargo check (all contracts)
+        run: |
+          set -e
+          shopt -s nullglob
+          for manifest in contracts/*/Cargo.toml; do
+            echo "::group::cargo check $manifest"
+            cargo check --manifest-path "$manifest"
+            echo "::endgroup::"
+          done
+
+      - name: cargo test (all contracts)
+        run: |
+          set -e
+          shopt -s nullglob
+          for manifest in contracts/*/Cargo.toml; do
+            echo "::group::cargo test $manifest"
             cargo test --manifest-path "$manifest"
+            echo "::endgroup::"
+          done
+
+      - name: cargo build --release --target wasm32v1-none (all contracts)
+        run: |
+          set -e
+          shopt -s nullglob
+          for manifest in contracts/*/Cargo.toml; do
+            echo "::group::cargo build (wasm) $manifest"
+            cargo build --release --target wasm32v1-none --manifest-path "$manifest"
+            echo "::endgroup::"
           done
