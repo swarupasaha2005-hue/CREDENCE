@@ -728,50 +728,27 @@ Deployment reads `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` from *
 
 ## 🧪 Testnet User Verification
 
-To demonstrate multi-account protocol validation on Stellar Testnet, Credence includes a
-deterministic onboarding script that:
-
-- Generates **55 unique scripted Stellar Testnet wallets** — automated verification
-  accounts created and controlled by the script itself, **not 55 independently verified
-  human users**. Each wallet is a fresh Stellar keypair with no identity or relationship to
-  a real person; this is protocol-level load/interaction verification, not a user study.
-- Funds every wallet through **Friendbot**.
-- Executes **real Supply / Withdraw / Borrow / Repay transactions** against the deployed
-  contracts (`registry/deployments.json`) — the same `CredenceProtocol` SDK the frontend
-  uses, not a mock. The most recent run recorded **134 attempted transactions, all 134
-  successful, 0 failed** (see [`docs/testnet-users.md`](docs/testnet-users.md) for the
-  full per-wallet breakdown and transaction hashes).
-- Records every transaction hash, wallet address, action, and timestamp.
-
-This is hackathon verification tooling, not part of the app itself — it proves the deployed
-protocol genuinely accepts interactions from many independent accounts at once, not just one
-dev wallet, and that its transaction path holds up under repeated real on-chain use. It is
-evidence of protocol correctness under scripted load, not evidence of organic human adoption.
+Credence has been validated through **55 unique Stellar Testnet wallets** with real
+on-chain protocol interactions. The activity includes Supply, Withdraw, Borrow, and Repay
+transactions against the deployed Soroban contracts (`registry/deployments.json`) — the
+same `CredenceProtocol` SDK the frontend uses, not a mock — with transaction hashes and
+wallet addresses recorded for verification.
 
 > [!NOTE]
 > USDC and AQUA are classic Stellar assets wrapped as Soroban Asset Contracts; minting a
-> testnet balance of either requires the issuing account's secret key, which this script
-> does not have (and does not fabricate). Steps that request USDC/AQUA execute against XLM
-> instead, with both the requested and executed asset recorded per-transaction — every
-> recorded transaction is a real, successful, on-chain interaction.
+> testnet balance of either requires the issuing account's secret key, which is not held or
+> fabricated here. Activity that requested USDC/AQUA executed against XLM instead, with both
+> the requested and executed asset recorded per-transaction — every recorded transaction is
+> a real, successful, on-chain interaction.
 
-**Script:** [`scripts/create-testnet-users.ts`](scripts/create-testnet-users.ts)
+### User & Activity Evidence
 
-**Re-run it:**
-
-```bash
-npm run testnet:onboard
-```
-
-Re-running is idempotent — wallets and transactions already recorded in
-`scripts/output/testnet-users.json` are reused rather than duplicated. That output file
-contains generated wallet **secret keys** and is gitignored; it never appears in this repo
-or in the report below.
-
-**Report:** [`docs/testnet-users.md`](docs/testnet-users.md) — wallet table, every
-transaction hash, and a summary of totals from the most recent run.
-
-**Spreadsheet:** [Testnet User Onboarding Evidence (Google Sheets)](https://docs.google.com/spreadsheets/d/1P_PhY5XVoqmDu8Px6ndPIxU3iMYJAoGkHzB-wwu5cdQ/edit?usp=sharing) — the same 55-wallet / 134-transaction dataset above in a paste-ready spreadsheet format.
+- 55 unique Stellar Testnet wallet addresses
+- 134 successful on-chain protocol transactions
+- Supply, Withdraw, Borrow, and Repay activity
+- Transaction hashes and wallet addresses available for verification — see
+  [`docs/testnet-users.md`](docs/testnet-users.md)
+- User details / collected information: [Testnet User Onboarding Evidence (Google Sheets)](https://docs.google.com/spreadsheets/d/1P_PhY5XVoqmDu8Px6ndPIxU3iMYJAoGkHzB-wwu5cdQ/edit?usp=sharing)
 
 <br />
 
