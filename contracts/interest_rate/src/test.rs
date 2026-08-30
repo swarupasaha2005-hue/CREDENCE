@@ -114,6 +114,105 @@ fn test_supply_and_reserve_rate() {
 }
 
 #[test]
+fn test_borrow_rate_at_zero_utilization_returns_base_rate() {
+    let env = Env::default();
+
+    // At 0% utilization, the piecewise curve contributes nothing from either
+    // slope, so the borrow rate should be exactly the configured base rate.
+    let base_rate = 250; // 2.5%
+    let rate = InterestRateModel::get_borrow_rate(env.clone(), 0, base_rate, 8000, 400, 7500);
+    assert_eq!(rate, base_rate);
+}
+
+#[test]
+fn test_borrow_index_unchanged_with_no_elapsed_time() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let (client, contract_id) = deploy_wired(&env, &admin, &lending_pool);
+    let asset = Address::generate(&env);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 5_000_000;
+    });
+
+    // First call at this timestamp initializes the index to WAD.
+    env.mock_auths(&[MockAuth {
+        address: &lending_pool,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_borrow_index",
+            args: (asset.clone(), 500i128).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    client.update_borrow_index(&asset, &500);
+    let index_after_first = client.get_borrow_index(&asset);
+    assert_eq!(index_after_first, 1_000_000_000_000_000_000);
+
+    // Calling again at the SAME timestamp (no ledger progression) must not
+    // grow the index further - there is no elapsed time to accrue over.
+    env.mock_auths(&[MockAuth {
+        address: &lending_pool,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_borrow_index",
+            args: (asset.clone(), 500i128).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    client.update_borrow_index(&asset, &500);
+    let index_after_second = client.get_borrow_index(&asset);
+
+    assert_eq!(
+        index_after_second, index_after_first,
+        "index must not change when no time elapsed between calls"
+    );
+}
+
+#[test]
+fn test_borrow_index_zero_rate_does_not_grow() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let lending_pool = Address::generate(&env);
+    let (client, contract_id) = deploy_wired(&env, &admin, &lending_pool);
+    let asset = Address::generate(&env);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1_000_000;
+    });
+    env.mock_auths(&[MockAuth {
+        address: &lending_pool,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_borrow_index",
+            args: (asset.clone(), 0i128).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    client.update_borrow_index(&asset, &0);
+    assert_eq!(client.get_borrow_index(&asset), 1_000_000_000_000_000_000);
+
+    // Advance a full year, but the borrow rate is (and remains) 0%.
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1_000_000 + 31_536_000;
+    });
+    env.mock_auths(&[MockAuth {
+        address: &lending_pool,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "update_borrow_index",
+            args: (asset.clone(), 0i128).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    client.update_borrow_index(&asset, &0);
+
+    // A 0% rate must never manufacture index growth merely from elapsed time.
+    assert_eq!(client.get_borrow_index(&asset), 1_000_000_000_000_000_000);
+}
+
+#[test]
 fn test_borrow_index() {
     let env = Env::default();
     let admin = Address::generate(&env);

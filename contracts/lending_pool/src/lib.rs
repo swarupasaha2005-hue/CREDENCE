@@ -11,6 +11,11 @@ pub trait ConfigInterface {
     fn get_oracle(env: Env) -> Address;
     fn get_interest_model(env: Env) -> Address;
     fn get_liquidation_engine(env: Env) -> Address;
+    fn get_base_borrow_rate(env: Env) -> u32;
+    fn get_optimal_utilization(env: Env) -> u32;
+    fn get_slope1(env: Env) -> u32;
+    fn get_slope2(env: Env) -> u32;
+    fn get_reserve_factor(env: Env) -> u32;
 }
 
 #[contractclient(name = "OracleClient")]
@@ -23,6 +28,7 @@ pub trait InterestModelInterface {
     fn update_borrow_index(env: Env, asset: Address, borrow_rate: i128);
     fn get_utilization_rate(env: Env, total_liquidity: i128, total_borrowed: i128) -> i128;
     fn get_borrow_rate(env: Env, utilization: i128, base_rate: i128, optimal_utilization: i128, slope1: i128, slope2: i128) -> i128;
+    fn get_supply_rate(env: Env, borrow_rate: i128, utilization: i128, reserve_factor: i128) -> i128;
     fn get_borrow_index(env: Env, asset: Address) -> i128;
 }
 
@@ -96,14 +102,35 @@ impl LendingPool {
         })
     }
 
-    /// Internal function to update the interest model before any liquidity change.
-    fn update_interest(env: &Env, asset: &Address, state: &PoolState) {
-        let config_addr: Address = env.storage().instance().get(&DataKey::ConfigAddress).unwrap();
-        let config = ConfigClient::new(env, &config_addr);
-        let interest_addr = config.get_interest_model();
-        let interest_model = InterestModelClient::new(env, &interest_addr);
-        
+    /// Accrues interest for `asset` up to now, using the rate that has been in
+    /// effect since the last update (`state.current_borrow_rate`). Must be
+    /// called BEFORE any liquidity/borrow changes are applied to `state`, so
+    /// the elapsed period accrues at the rate that actually applied during it.
+    fn update_interest(asset: &Address, state: &PoolState, interest_model: &InterestModelClient) {
         interest_model.update_borrow_index(asset, &state.current_borrow_rate);
+    }
+
+    /// Recomputes utilization, borrow rate, and supply rate for `asset` from
+    /// `state`'s current total_liquidity/total_borrowed, using the existing
+    /// InterestRateModel curve and the protocol's configured risk parameters.
+    /// Must be called AFTER `state`'s balances reflect the just-applied action,
+    /// so the next accrual period compounds at the correct, live rate instead
+    /// of a stale (default-zero) one.
+    fn refresh_rates(config: &ConfigClient, interest_model: &InterestModelClient, state: &mut PoolState) {
+        let utilization = interest_model.get_utilization_rate(&state.total_liquidity, &state.total_borrowed);
+
+        let base_rate = config.get_base_borrow_rate() as i128;
+        let optimal_utilization = config.get_optimal_utilization() as i128;
+        let slope1 = config.get_slope1() as i128;
+        let slope2 = config.get_slope2() as i128;
+        let borrow_rate = interest_model.get_borrow_rate(&utilization, &base_rate, &optimal_utilization, &slope1, &slope2);
+
+        let reserve_factor = config.get_reserve_factor() as i128;
+        let supply_rate = interest_model.get_supply_rate(&borrow_rate, &utilization, &reserve_factor);
+
+        state.current_utilization = utilization;
+        state.current_borrow_rate = borrow_rate;
+        state.current_supply_rate = supply_rate;
     }
 
     /// Deposits collateral into the pool.
@@ -111,10 +138,14 @@ impl LendingPool {
         user.require_auth();
         if amount <= 0 { panic!("Amount must be greater than 0"); }
 
+        let config_addr: Address = env.storage().instance().get(&DataKey::ConfigAddress).unwrap();
+        let config = ConfigClient::new(&env, &config_addr);
+        let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
+
         let mut state = Self::get_pool_state(&env, &asset);
-        
-        // 1. Update Interest globally BEFORE liquidity changes
-        Self::update_interest(&env, &asset, &state);
+
+        // 1. Accrue interest for elapsed time under the previous rate, BEFORE liquidity changes
+        Self::update_interest(&asset, &state, &interest_model);
 
         // 2. Transfer tokens from user to pool
         let token_client = token::Client::new(&env, &asset);
@@ -124,16 +155,15 @@ impl LendingPool {
         let mut position = Self::get_user_position(&env, &user, &asset);
         position.collateral_amount += amount;
         position.last_interaction = env.ledger().timestamp();
-        
+
         let user_key = DataKey::UserPosition(user.clone(), asset.clone());
         env.storage().persistent().set(&user_key, &position);
         extend_ttl(&env, &user_key);
 
-        // 4. Update Pool State
+        // 4. Update Pool State and recompute live rates from the new liquidity
         state.total_liquidity += amount;
-        // In a real implementation, we'd query the interest model for new rates here.
-        // For simplicity, we just save the updated liquidity.
-        
+        Self::refresh_rates(&config, &interest_model, &mut state);
+
         let pool_key = DataKey::PoolState(asset.clone());
         env.storage().persistent().set(&pool_key, &state);
         extend_ttl(&env, &pool_key);
@@ -152,9 +182,9 @@ impl LendingPool {
         let oracle = OracleClient::new(&env, &config.get_oracle());
         let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
 
-        // 2. Update Interest for both assets before calculating debt
+        // 2. Accrue interest for the borrow asset before calculating debt
         let mut borrow_state = Self::get_pool_state(&env, &borrow_asset);
-        Self::update_interest(&env, &borrow_asset, &borrow_state);
+        Self::update_interest(&borrow_asset, &borrow_state, &interest_model);
 
         // 3. Get Prices
         let collateral_price = oracle.get_price(&collateral_asset);
@@ -197,10 +227,11 @@ impl LendingPool {
         env.storage().persistent().set(&user_key, &position_borrow);
         extend_ttl(&env, &user_key);
 
-        // 7. Update pool state
+        // 7. Update pool state and recompute live rates from the new utilization
         borrow_state.total_liquidity -= amount;
         borrow_state.total_borrowed += amount;
-        
+        Self::refresh_rates(&config, &interest_model, &mut borrow_state);
+
         let pool_key = DataKey::PoolState(borrow_asset.clone());
         env.storage().persistent().set(&pool_key, &borrow_state);
         extend_ttl(&env, &pool_key);
@@ -218,7 +249,7 @@ impl LendingPool {
         let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
 
         let mut state = Self::get_pool_state(&env, &asset);
-        Self::update_interest(&env, &asset, &state);
+        Self::update_interest(&asset, &state, &interest_model);
 
         let mut position = Self::get_user_position(&env, &user, &asset);
         
@@ -243,11 +274,12 @@ impl LendingPool {
         env.storage().persistent().set(&user_key, &position);
         extend_ttl(&env, &user_key);
 
-        // Update pool state
+        // Update pool state and recompute live rates from the new utilization
         state.total_liquidity += repay_amount;
         state.total_borrowed -= repay_amount;
         if state.total_borrowed < 0 { state.total_borrowed = 0; }
-        
+        Self::refresh_rates(&config, &interest_model, &mut state);
+
         let pool_key = DataKey::PoolState(asset.clone());
         env.storage().persistent().set(&pool_key, &state);
         extend_ttl(&env, &pool_key);
@@ -293,7 +325,7 @@ impl LendingPool {
         }
 
         let mut state = Self::get_pool_state(&env, &collateral_asset);
-        Self::update_interest(&env, &collateral_asset, &state);
+        Self::update_interest(&collateral_asset, &state, &interest_model);
 
         // Transfer tokens to user
         let token_client = token::Client::new(&env, &collateral_asset);
@@ -306,6 +338,8 @@ impl LendingPool {
         extend_ttl(&env, &user_key);
 
         state.total_liquidity -= amount;
+        Self::refresh_rates(&config, &interest_model, &mut state);
+
         let pool_key = DataKey::PoolState(collateral_asset.clone());
         env.storage().persistent().set(&pool_key, &state);
         extend_ttl(&env, &pool_key);
