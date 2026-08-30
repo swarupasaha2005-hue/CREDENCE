@@ -1,37 +1,53 @@
 "use client";
 
 import { useStellar } from "@/context/StellarContext";
+import { WalletSelectorModal } from "@/components/wallet/WalletSelectorModal";
 import { motion } from "framer-motion";
-import { 
-  LogOut, 
-  Copy, 
-  RefreshCcw, 
-  Send, 
-  ExternalLink, 
-  CheckCircle2, 
+import {
+  LogOut,
+  Copy,
+  RefreshCcw,
+  Send,
+  ExternalLink,
+  CheckCircle2,
   AlertCircle,
   Wallet
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { address, balance, network, disconnectWallet, refreshBalance, sendXlm, walletName } = useStellar();
-  const router = useRouter();
+  const { address, balance, network, disconnectWallet, refreshBalance, sendXlm, walletName, isConnecting } = useStellar();
 
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [recentTx, setRecentTx] = useState<{ hash: string; timestamp: Date } | null>(null);
+  const [isWalletSelectorOpen, setIsWalletSelectorOpen] = useState(false);
 
-  useEffect(() => {
-    if (!address) {
-      router.push("/");
-    }
-  }, [address, router]);
-
-  if (!address) return null;
+  if (!address) {
+    return (
+      <div className="min-h-screen pt-24 pb-12 px-6 flex flex-col items-center justify-center">
+        <div className="w-full max-w-md text-center rounded-2xl border border-market-border bg-market-surface p-10">
+          <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#E88DAF]/10">
+            <Wallet className="w-6 h-6 text-[#E88DAF]" />
+          </div>
+          <h1 className="text-2xl font-display font-bold text-market-text mb-2">Connect Your Wallet</h1>
+          <p className="text-market-text-secondary mb-8">
+            Connect a Stellar wallet to view your Credence dashboard, balances, and transaction history.
+          </p>
+          <button
+            onClick={() => setIsWalletSelectorOpen(true)}
+            disabled={isConnecting}
+            className="w-full rounded-full min-h-[48px] px-6 py-3 bg-[#E88DAF] text-[#050505] font-medium transition-all hover:bg-[#F3A6C3] active:bg-[#DD7EA5] disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isConnecting ? "Connecting..." : "Connect Wallet"}
+          </button>
+        </div>
+        <WalletSelectorModal open={isWalletSelectorOpen} onClose={() => setIsWalletSelectorOpen(false)} />
+      </div>
+    );
+  }
 
   const copyAddress = () => {
     navigator.clipboard.writeText(address);

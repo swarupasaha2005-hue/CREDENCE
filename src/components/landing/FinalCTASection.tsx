@@ -2,6 +2,7 @@
 import React from 'react';
 import { Button } from '../ui/button';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useMarkets } from '../../hooks/useMarkets';
 import { computeMarketAggregates } from '../../lib/market-aggregates';
 import { formatCompactUsdAmount } from '../../lib/market-format';
@@ -53,9 +54,11 @@ const FinalCTASection = () => {
 
             {/* Right Button */}
             <div className="lg:col-span-3 flex justify-center lg:justify-end">
-              <Button size="lg" className="rounded-full shadow-lg shadow-primary/20 bg-dark text-white hover:bg-dark/90 group w-full md:w-auto">
-                Launch App
-                <span className="ml-2 group-hover:translate-x-1 transition-transform">↗</span>
+              <Button asChild size="lg" className="rounded-full shadow-lg shadow-primary/20 bg-dark text-white hover:bg-dark/90 group w-full md:w-auto">
+                <Link href="/dashboard">
+                  Launch App
+                  <span className="ml-2 group-hover:translate-x-1 transition-transform">↗</span>
+                </Link>
               </Button>
             </div>
           </div>
