@@ -911,7 +911,7 @@ claimed as verified.
 | Improvement #3 — oracle safety hardening | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 16 passing tests; live on the currently deployed `oracle`, verified with real rejected/accepted Testnet transactions |
 | Contract test suite | **EVIDENCE AVAILABLE** | 50/50 passing across all 6 contracts — see [Contract Test Coverage](#-contract-test-coverage) |
 | Scripted Testnet wallet verification | **EVIDENCE AVAILABLE** | 55 unique scripted wallets, 134/134 successful transactions — see [Testnet User Verification](#-testnet-user-verification). **Not evidence of human user adoption** — these are automated verification accounts, not people. |
-| Git history | **EVIDENCE AVAILABLE** | 41 commits on `main` as of this writing (`git rev-list --count HEAD`) |
+| Git history | **EVIDENCE AVAILABLE** | 43 commits on `main` as of this writing (`git rev-list --count HEAD`) |
 | CI/CD | **IMPLEMENTED + EVIDENCE AVAILABLE** | `.github/workflows/ci.yml` (build + `next build` + `cargo test`) and `deploy.yml` (Vercel prod deploy) — see [CI](#️-ci) and [Deployment Pipeline](#-deployment-pipeline) |
 | Analytics | **IMPLEMENTED** | Vercel Web Analytics + custom `wallet_connect`/`supply`/`withdraw`/`borrow`/`repay` events — see [Analytics](#-analytics). No dashboard screenshot is included in this repository; the implementation itself is the evidence. |
 | Feedback mechanism | **IMPLEMENTED** | In-app Google Form link via footer button — see [User Feedback](#-user-feedback). **No responses have been collected yet** — `docs/user-feedback.md` is an intentionally blank template; no feedback data is claimed or fabricated. |
