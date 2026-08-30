@@ -55,6 +55,7 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Project Structure](#-project-structure)
 - [Tech Stack](#-tech-stack)
 - [Smart Contracts](#-smart-contracts)
+- [Smart Contract Security & Protocol Improvements](#-smart-contract-security--protocol-improvements)
 - [User Flow](#-user-flow)
 - [Screenshots](#-screenshots)
 - [Local Development](#-local-development)
@@ -66,6 +67,8 @@ https://drive.google.com/file/d/1WXQnBDPIZJSNWP4Cf7yqF0GGHUZ15ysY/view?usp=shari
 - [Monitoring](#-monitoring)
 - [Analytics](#-analytics)
 - [CI](#️-ci)
+- [Contract Test Coverage](#-contract-test-coverage)
+- [Level 5 Verification](#-level-5-verification)
 - [Roadmap](#️-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -406,7 +409,10 @@ credence/
 
 ## 📜 Smart Contracts
 
-All six contracts below are deployed and live on **Stellar Testnet**. Addresses are read at runtime from [`registry/deployments.json`](./registry/deployments.json) — nothing in the frontend hardcodes an address.
+All six contracts below are deployed and live on **Stellar Testnet**. Addresses are read at runtime from [`registry/deployments.json`](./registry/deployments.json) — nothing in the frontend hardcodes an address. That file is the single source of truth the deployed frontend/SDK actually calls; the addresses below are copied from it and will go stale the moment it changes, so treat the JSON as authoritative if the two ever disagree.
+
+> [!NOTE]
+> `lending_pool`, `liquidation_engine`, `configuration`, `interest_rate_model`, and `oracle` have each been redeployed since the original hackathon submission as part of the security hardening described in [Smart Contract Security & Protocol Improvements](#-smart-contract-security--protocol-improvements) below. Soroban contracts have no in-place upgrade mechanism, so a logic change means a new contract ID; superseded addresses are not separately archived in this repository — `registry/deployments.json` (and the table below, kept in sync with it) always reflects the current, live set.
 
 <table>
 <tr>
@@ -415,7 +421,7 @@ All six contracts below are deployed and live on **Stellar Testnet**. Addresses 
 
 The core of the protocol. Holds deposited collateral, tracks each user's supplied and borrowed balances per asset, and enforces that no borrow or withdrawal can push a position below its required collateralization. Debt is tracked as WAD-scaled shares against a global borrow index, so interest accrues without a per-block state write for every borrower.
 
-`CD6KIVR7Q57W37SWE3MX3T5LVX7LXGF7ES2GRKSVFPBHR3MUWYZE4QDK`
+`CABAA2G6QBAO7R5FYTXFRIOVETIZ7BDU6ZRNYO6XNWAAFIGEV3CFIYVP`
 
 </td>
 </tr>
@@ -425,7 +431,7 @@ The core of the protocol. Holds deposited collateral, tracks each user's supplie
 
 Stores the current USD price for each supported asset, admin-updated and timestamped on write. Every market, position, and health-factor calculation in the protocol reads price from here — there is no client-side price fallback.
 
-`CD4HRMQGXNOO4CDB4J7PQYI5MTFQNA2TGIMRMFUHP5Q3PH7T2EB6SUTT`
+`CBXPGZAH6G5AO2JCQ3CGYPVGFWHQNTZXKSDP3CAZOTRICP6H3ZWR2ZKE`
 
 </td>
 </tr>
@@ -435,7 +441,7 @@ Stores the current USD price for each supported asset, admin-updated and timesta
 
 Computes borrow APY from pool utilization using a piecewise-linear curve (an "Aave-style" kink at the optimal utilization point), and tracks a compounding borrow index per asset so debt grows correctly over time without the pool needing to touch every position on every block.
 
-`CA7QVKZN7YYVQ4XWYRSJKRN4FODGGLJ4P4ZYXKHOMQTJ3DM4HRGWQT3Q`
+`CAHFVSQNQRYKKP4PXLXM6UXAQYYNAUXEY6B7OXO3Z2P7MWPQIVMSFZJW`
 
 </td>
 </tr>
@@ -455,7 +461,7 @@ Receives the protocol's reserve-factor share of interest — the portion of borr
 
 The protocol's control plane. Holds LTV, liquidation threshold, liquidation bonus, and reserve factor, plus the addresses of every other contract. Every other contract resolves its dependencies through this one, so parameters can be tuned centrally.
 
-`CC3P2CRXZP4EQXKQ2RTU3ZKD4SKE6LG5PW26TJC6ZMMFOIQ7WUO3S3FK`
+`CDAPRDEMSG2DGV2LJQHM2353A4JHFYWYNXDCCQCJETVY7OIQ6FDUS4V3`
 
 </td>
 </tr>
@@ -465,11 +471,96 @@ The protocol's control plane. Holds LTV, liquidation threshold, liquidation bonu
 
 Allows a third party to repay part of an undercollateralized borrower's debt in exchange for a discounted claim on their collateral, keeping the pool solvent when a position's health factor falls below 1.0.
 
-`CBQDUJ5NW6CIIXDDY4OEQAVTQ3B5AXV6XNTM7DV6HI3U3YUS6X34KW54`
+`CAYDXJ27CQBMMRDRG47WD7M7QKTN4PISVIIXBDRNPSCEHQOPCGGBWHDJ`
 
 </td>
 </tr>
 </table>
+
+<br />
+
+---
+
+## 🔐 Smart Contract Security & Protocol Improvements
+
+Three post-launch hardening passes were made to the contracts above. Each is described only
+by what its code and tests actually do — no feature below is claimed without a
+corresponding test or a real Testnet transaction.
+
+### Improvement #1 — Cross-Contract Authorization Hardening
+
+**Status: implemented, tested, deployed to Testnet.**
+
+Two state-mutating entry points previously had no caller restriction at all:
+
+- `InterestRateModel.update_borrow_index()` — now requires the caller to be the exact
+  `LendingPool` address registered in `configuration`. Enforced via
+  `config.get_lending_pool().require_auth()`, which Soroban only satisfies when that
+  contract is the genuine, direct on-chain invoker — no signature, no hardcoded address.
+- `LendingPool.execute_liquidation_burn()` — now requires the caller to be the exact
+  `LiquidationEngine` address registered in `configuration`, the same way.
+
+**Tests:** 3 authorization tests in `contracts/interest_rate/src/test.rs` (registered pool
+allowed, unauthorized user rejected, unauthenticated call rejected) + 3 in
+`contracts/lending_pool/src/test.rs` (registered engine allowed, unauthorized user rejected,
+unauthenticated call rejected).
+
+### Improvement #2 — Live On-Chain Interest Accrual
+
+**Status: implemented and tested; not yet deployed to the current Testnet `lending_pool`.**
+
+The `InterestRateModel`'s utilization/borrow-rate/supply-rate curve was already fully
+implemented and unit-tested, but `LendingPool` never called it after a state change —
+`PoolState.current_borrow_rate` defaulted to `0` and nothing ever wrote a different value,
+so the borrow index could never actually accrue interest in practice. The fix adds a
+`refresh_rates()` step, called after every `deposit_collateral`, `borrow`, `repay`, and
+`withdraw_collateral`, that recomputes utilization → borrow rate → supply rate from the
+*existing* `InterestRateModel` and persists them — no new interest formula was introduced.
+
+**Tests:** 8 new tests across `contracts/interest_rate/src/test.rs` (base-rate-at-zero-
+utilization, no-elapsed-time no-op, zero-rate-no-growth) and `contracts/lending_pool/src/test.rs`
+(live rates after supply/borrow/repay, interest accruing over elapsed time, zero-debt
+positions never accruing phantom interest) — the lending_pool tests exercise the real
+`interest_rate` crate as a dev-dependency, not a hand-rolled stand-in.
+
+> [!NOTE]
+> This fix is committed to this repository and covered by the passing tests below, but the
+> currently deployed Testnet `lending_pool` (see the address in the table above) still only
+> has Improvement #1's code — redeploying it with this fix is a pending follow-up, not yet
+> done. Querying `get_pool_state_view` on the live contract today still returns
+> `current_borrow_rate: 0`; that is expected until it's redeployed, not a bug in this fix.
+
+### Improvement #3 — Oracle Precision & Price Safety Hardening
+
+**Status: implemented, tested, deployed to Testnet.**
+
+- **Price scale audit:** the oracle, `lending_pool`, `liquidation_engine`, and the SDK all
+  already interpreted prices identically as WAD-scaled USD (`1e18 = $1.00`) — confirmed by
+  tracing every consumer before changing anything. No scale conversion was needed or added.
+- **Zero/negative price rejection:** `Oracle.set_price()` now rejects any `price <= 0` at
+  the point of write, so an invalid price can never enter storage.
+- **Stale-price protection:** `Oracle.get_price()` now rejects any price older than 24 hours
+  (`MAX_PRICE_AGE_SECONDS`), using the timestamp the oracle was already recording on every
+  write — no new storage field was needed.
+- **Defense-in-depth:** `get_price()` also re-checks `price > 0` on every read, independent
+  of the write-side check.
+- **Authorization unchanged:** `set_price` still requires the oracle admin's signature,
+  exactly as before — this hardening pass did not touch or weaken who can update a price.
+- Because `LendingPool` and `LiquidationEngine` read prices exclusively through
+  `Oracle.get_price()`, both automatically inherit this protection with zero changes to
+  either of their own contracts.
+
+**Tests:** 5 new tests in `contracts/oracle/src/test.rs` (zero rejected, negative rejected,
+extreme-but-valid price handled, stale price rejected, price just under the age limit still
+accepted) + 6 new tests in `contracts/lending_pool/src/test.rs` and 5 in
+`contracts/liquidation_engine/src/test.rs` proving both consumers correctly propagate the
+oracle's rejection and use per-asset prices consistently between health-factor and
+liquidation math.
+
+**Deployed to Testnet** at the Oracle address in the table above, with real transactions
+verifying: valid price set/read, zero/negative price rejected, unauthorized update rejected
+by a freshly funded non-admin wallet, and a full Supply → Borrow → Repay → Withdraw →
+Liquidation cycle against the new Oracle.
 
 <br />
 
@@ -635,18 +726,25 @@ Deployment reads `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` from *
 
 ## 🧪 Testnet User Verification
 
-To demonstrate multi-user protocol validation on Stellar Testnet, Credence includes a
+To demonstrate multi-account protocol validation on Stellar Testnet, Credence includes a
 deterministic onboarding script that:
 
-- Generates **10+ unique Stellar Testnet wallets**.
+- Generates **55 unique scripted Stellar Testnet wallets** — automated verification
+  accounts created and controlled by the script itself, **not 55 independently verified
+  human users**. Each wallet is a fresh Stellar keypair with no identity or relationship to
+  a real person; this is protocol-level load/interaction verification, not a user study.
 - Funds every wallet through **Friendbot**.
 - Executes **real Supply / Withdraw / Borrow / Repay transactions** against the deployed
   contracts (`registry/deployments.json`) — the same `CredenceProtocol` SDK the frontend
-  uses, not a mock.
+  uses, not a mock. The most recent run recorded **134 attempted transactions, all 134
+  successful, 0 failed** (see [`docs/testnet-users.md`](docs/testnet-users.md) for the
+  full per-wallet breakdown and transaction hashes).
 - Records every transaction hash, wallet address, action, and timestamp.
 
 This is hackathon verification tooling, not part of the app itself — it proves the deployed
-protocol genuinely accepts interactions from independent accounts, not just one dev wallet.
+protocol genuinely accepts interactions from many independent accounts at once, not just one
+dev wallet, and that its transaction path holds up under repeated real on-chain use. It is
+evidence of protocol correctness under scripted load, not evidence of organic human adoption.
 
 > [!NOTE]
 > USDC and AQUA are classic Stellar assets wrapped as Soroban Asset Contracts; minting a
@@ -787,6 +885,56 @@ No wallet address, transaction amount, XDR, or any other user-identifiable data 
 > **This project resolves the CI dependency conflict by pinning `ed25519-dalek` to a compatible upstream release using Cargo's patch mechanism.** `soroban-env-host 22.1.3` declares an open-ended `ed25519-dalek = ">=2.0.0"` dependency, which lets Cargo resolve `ed25519-dalek 3.0.0` (and with it, an incompatible `rand_core 0.10.x`) alongside `rand_chacha 0.3.1` elsewhere in the same graph, which is built on the older `rand_core 0.6.x` — the upstream constraint itself is still open-ended and unfixed (tracked at [stellar/rs-soroban-env#1705](https://github.com/stellar/rs-soroban-env/issues/1705)). Each contract's `Cargo.toml` carries a local `[patch.crates-io]` entry pinning `ed25519-dalek` to its `2.2.0` release (via the exact `ed25519-2.2.0` git tag in the `dalek-cryptography/curve25519-dalek` monorepo, since a plain version-string patch isn't valid Cargo syntax) to work around it in this repository's build. This unifies the whole dependency graph back onto a single, compatible `rand_core 0.6.x`. `soroban-sdk` was not upgraded — every contract still declares `soroban-sdk = "22.0.0"` in `Cargo.toml`, which resolves to `soroban-sdk 22.0.11` in `Cargo.lock` (the same resolved version as before this fix; only `ed25519-dalek`'s resolution changed) — and no contract source was changed. Contract tests now execute normally in CI as a required job.
 >
 > One pre-existing test, `interest_rate::test_borrow_index`, was previously masked by the compile failure. It's unrelated to dependency resolution: the contract's interest-index math does an intermediate truncating integer division before multiplying by the time delta, producing a deterministic ~5.65 × 10⁻¹² relative rounding difference from the idealized value. The test now asserts within a tolerance that comfortably covers this known, negligible fixed-point truncation instead of requiring bit-exact equality.
+
+<br />
+
+---
+
+## 🧪 Contract Test Coverage
+
+`cargo test` across all six contracts, run locally and enforced as a required CI job on
+every push/PR (see [CI](#️-ci) above):
+
+| Contract | Tests | Result |
+|---|---:|---|
+| `configuration` | 4 | ✅ passing |
+| `oracle` | 11 | ✅ passing |
+| `interest_rate` | 10 | ✅ passing |
+| `lending_pool` | 16 | ✅ passing |
+| `liquidation_engine` | 7 | ✅ passing |
+| `treasury` | 2 | ✅ passing |
+| **Total** | **50** | **50 passing, 0 failing** |
+
+Coverage includes contract initialization, admin authorization, the cross-contract
+authorization added in Improvement #1, live rate/accrual behavior added in Improvement #2,
+and the oracle/price-safety behavior added in Improvement #3 — see
+[Smart Contract Security & Protocol Improvements](#-smart-contract-security--protocol-improvements)
+above for what each set of tests actually proves.
+
+<br />
+
+---
+
+## ✅ Level 5 Verification
+
+A concise, honest accounting of what's implemented versus what has direct evidence behind
+it. Anything not listed as **EVIDENCE AVAILABLE** with a concrete artifact is not being
+claimed as verified.
+
+| Item | Status | Evidence |
+|---|---|---|
+| Production deployment (frontend) | **IMPLEMENTED + EVIDENCE AVAILABLE** | Live at [credence-sigma.vercel.app](https://credence-sigma.vercel.app); CI/CD pipeline in [Deployment Pipeline](#-deployment-pipeline) |
+| 6 contracts deployed on Stellar Testnet | **IMPLEMENTED + EVIDENCE AVAILABLE** | Addresses in [Smart Contracts](#-smart-contracts), sourced live from `registry/deployments.json` |
+| Improvement #1 — cross-contract authorization | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 6 passing tests; live on the currently deployed `lending_pool`/`interest_rate_model` |
+| Improvement #2 — live interest accrual | **IMPLEMENTED + TESTED** | 8 passing tests; **not yet deployed** to the current Testnet `lending_pool` (see note above) |
+| Improvement #3 — oracle safety hardening | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 16 passing tests; live on the currently deployed `oracle`, verified with real rejected/accepted Testnet transactions |
+| Contract test suite | **EVIDENCE AVAILABLE** | 50/50 passing across all 6 contracts — see [Contract Test Coverage](#-contract-test-coverage) |
+| Scripted Testnet wallet verification | **EVIDENCE AVAILABLE** | 55 unique scripted wallets, 134/134 successful transactions — see [Testnet User Verification](#-testnet-user-verification). **Not evidence of human user adoption** — these are automated verification accounts, not people. |
+| Git history | **EVIDENCE AVAILABLE** | 38 commits on `main` as of this writing (`git log --oneline \| wc -l`) |
+| CI/CD | **IMPLEMENTED + EVIDENCE AVAILABLE** | `.github/workflows/ci.yml` (build + `next build` + `cargo test`) and `deploy.yml` (Vercel prod deploy) — see [CI](#️-ci) and [Deployment Pipeline](#-deployment-pipeline) |
+| Analytics | **IMPLEMENTED** | Vercel Web Analytics + custom `wallet_connect`/`supply`/`withdraw`/`borrow`/`repay` events — see [Analytics](#-analytics). No dashboard screenshot is included in this repository; the implementation itself is the evidence. |
+| Feedback mechanism | **IMPLEMENTED** | In-app Google Form link via footer button — see [User Feedback](#-user-feedback). **No responses have been collected yet** — `docs/user-feedback.md` is an intentionally blank template; no feedback data is claimed or fabricated. |
+| Error monitoring | **IMPLEMENTED** | Sentry, production-only — see [Monitoring](#-monitoring) |
 
 <br />
 
