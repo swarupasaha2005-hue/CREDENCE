@@ -3,7 +3,6 @@ import { Inter, Instrument_Serif } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import "./globals.css";
-import Footer from "../components/landing/Footer";
 import { WalletProvider } from "../context/WalletContext";
 import { QueryProvider } from "../lib/providers/query-provider";
 
@@ -30,7 +29,6 @@ export default function RootLayout({
         <QueryProvider>
           <WalletProvider>
             {children}
-            <Footer />
             <Toaster theme="dark" position="bottom-right" richColors />
           </WalletProvider>
         </QueryProvider>

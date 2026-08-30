@@ -16,6 +16,12 @@ pub struct PriceData {
     pub timestamp: u64,
 }
 
+// Maximum age a price is trusted for before it's treated as stale, in
+// seconds. Mirrors the ~1-day freshness window this contract already uses
+// for its own persistent-storage TTL (see the extend_ttl call in set_price,
+// "roughly 1 to 10 days in ledgers") - not a newly-invented constant.
+const MAX_PRICE_AGE_SECONDS: u64 = 86_400;
+
 #[contract]
 pub struct OracleContract;
 
@@ -36,10 +42,13 @@ impl OracleContract {
     }
 
     /// Sets the price for a specific asset. Only the admin can call this.
-    /// Price is represented as a fixed-point integer (e.g. 7 decimals for XLM).
+    /// Price is represented as a fixed-point integer (WAD, 1e18 = $1.00).
     pub fn set_price(env: Env, asset: Address, price: i128) {
         check_admin(&env);
-        
+        if price <= 0 {
+            panic!("Price must be positive");
+        }
+
         let current_timestamp = env.ledger().timestamp();
         let price_data = PriceData {
             price,
@@ -53,14 +62,28 @@ impl OracleContract {
         env.events().publish((Symbol::new(&env, "set_price"), asset), price_data);
     }
 
-    /// Gets the current price of an asset. Panics if the asset price does not exist.
+    /// Gets the current price of an asset. Panics if the asset price does not
+    /// exist, is non-positive (defense-in-depth against any corrupted/legacy
+    /// state, even though `set_price` already rejects this at the source), or
+    /// is older than `MAX_PRICE_AGE_SECONDS`. Every protocol consumer
+    /// (LendingPool, LiquidationEngine) reads prices exclusively through this
+    /// function, so this is the single choke point for price safety.
     pub fn get_price(env: Env, asset: Address) -> i128 {
         let price_data: PriceData = env
             .storage()
             .persistent()
             .get(&DataKey::Price(asset))
             .expect("Price not found for asset");
-            
+
+        if price_data.price <= 0 {
+            panic!("Invalid oracle price");
+        }
+
+        let age = env.ledger().timestamp().saturating_sub(price_data.timestamp);
+        if age > MAX_PRICE_AGE_SECONDS {
+            panic!("Oracle price is stale");
+        }
+
         price_data.price
     }
 

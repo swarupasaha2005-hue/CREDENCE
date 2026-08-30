@@ -11,6 +11,10 @@ soroban-sdk = "22.0.0"
 
 [dev_dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+# Used only by tests to exercise the real, hardened Oracle contract end-to-end
+# (zero/stale price rejection), rather than a hand-rolled stand-in. Does not
+# affect the deployed liquidation_engine WASM (dev-dependency only).
+oracle = { path = "../oracle" }
 
 [patch.crates-io]
 # Upstream fix for stellar/rs-soroban-env#1705: soroban-env-host 22.1.3 declares an

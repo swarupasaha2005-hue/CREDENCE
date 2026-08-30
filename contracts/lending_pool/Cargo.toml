@@ -16,6 +16,9 @@ soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 # utilization/borrow-rate/supply-rate/index outputs. Does not affect the
 # deployed lending_pool WASM (dev-dependency only).
 interest_rate = { path = "../interest_rate" }
+# Used only by tests to prove LendingPool inherits the real Oracle's
+# zero/stale-price rejection. Does not affect the deployed lending_pool WASM.
+oracle = { path = "../oracle" }
 
 [patch.crates-io]
 # Upstream fix for stellar/rs-soroban-env#1705: soroban-env-host 22.1.3 declares an

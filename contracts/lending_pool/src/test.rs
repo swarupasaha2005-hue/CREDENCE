@@ -531,3 +531,219 @@ fn test_zero_debt_position_accrues_no_phantom_interest() {
     let position = f.client.get_user_position_view(&f.user, &f.asset);
     assert_eq!(position.scaled_debt, 0, "a user who never borrowed must never accrue debt");
 }
+
+// --- Oracle price-safety integration tests (Improvement #3) ---
+//
+// Uses two distinct assets with two distinct, non-1:1 prices so that (unlike
+// the same-asset accrual fixture above, where any consistent price cancels
+// out of the ratio) the tests actually discriminate whether LendingPool
+// interprets each asset's oracle price correctly and independently.
+
+struct TwoAssetFixture {
+    client: LendingPoolClient<'static>,
+    collat_asset: Address,
+    borrow_asset: Address,
+    user: Address,
+}
+
+const COLLAT_PRICE: i128 = 3 * WAD; // $3.00
+const BORROW_PRICE: i128 = WAD + WAD / 2; // $1.50
+
+fn setup_two_asset_fixture(env: &Env) -> TwoAssetFixture {
+    env.mock_all_auths();
+
+    let pool_id = env.register_contract(None, LendingPool);
+    let client = LendingPoolClient::new(env, &pool_id);
+
+    let interest_admin = Address::generate(env);
+    let interest_id = env.register_contract(None, RealInterestRateModel);
+    let interest_client = interest_rate::InterestRateModelClient::new(env, &interest_id);
+
+    let oracle_id = env.register_contract(None, MockOracle);
+    let oracle_client = MockOracleClient::new(env, &oracle_id);
+
+    let token_admin = Address::generate(env);
+    let collat_asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let borrow_asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    oracle_client.set_price(&collat_asset, &COLLAT_PRICE);
+    oracle_client.set_price(&borrow_asset, &BORROW_PRICE);
+
+    let config_id = env.register_contract(None, FullMockConfig);
+    let config_client = FullMockConfigClient::new(env, &config_id);
+    config_client.setup(
+        &pool_id,
+        &interest_id,
+        &oracle_id,
+        &TEST_LTV,
+        &TEST_LIQ_THRESHOLD,
+        &TEST_BASE_RATE,
+        &TEST_OPTIMAL_UTILIZATION,
+        &TEST_SLOPE1,
+        &TEST_SLOPE2,
+        &TEST_RESERVE_FACTOR,
+    );
+
+    interest_client.initialize(&interest_admin);
+    interest_client.set_config_address(&config_id);
+    client.initialize(&config_id);
+
+    let user = Address::generate(env);
+    token::StellarAssetClient::new(env, &collat_asset).mint(&user, &1_000_000_000i128);
+    token::StellarAssetClient::new(env, &borrow_asset).mint(&user, &1_000_000_000i128);
+
+    TwoAssetFixture { client, collat_asset, borrow_asset, user }
+}
+
+#[test]
+fn test_borrow_capacity_uses_correct_price_across_assets() {
+    let env = Env::default();
+    let f = setup_two_asset_fixture(&env);
+
+    // Collateral: 1,000 units @ $3.00 = $3,000 value. LTV 70% => max borrow $2,100.
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    // Seed the borrow asset's own pool liquidity.
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+
+    // At $1.50/unit, borrowing exactly 1,400 units = $2,100 - precisely at
+    // the boundary of the 70% LTV capacity computed from the $3.00 collateral
+    // price. This only holds if both prices are interpreted correctly and
+    // independently (the same-asset fixture above can't distinguish this,
+    // since a shared price cancels out of the ratio).
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1_400);
+
+    let state = f.client.get_pool_state_view(&f.borrow_asset);
+    assert_eq!(state.total_borrowed, 1_400);
+}
+
+#[test]
+#[should_panic(expected = "Exceeds borrow capacity")]
+fn test_borrow_rejected_just_beyond_capacity_at_correct_price() {
+    let env = Env::default();
+    let f = setup_two_asset_fixture(&env);
+
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+
+    // One unit beyond the $2,100 capacity boundary computed above.
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1_401);
+}
+
+#[test]
+fn test_withdraw_health_factor_uses_correct_price() {
+    let env = Env::default();
+    let f = setup_two_asset_fixture(&env);
+
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1_000); // $1,500 debt
+
+    // liquidation_value must stay >= debt_value ($1,500) using liq_threshold 75%.
+    // Withdrawing down to 700 units leaves $2,100 collateral value * 75% = $1,575 >= $1,500: safe.
+    f.client.withdraw_collateral(&f.user, &f.collat_asset, &f.borrow_asset, &300);
+    let position = f.client.get_user_position_view(&f.user, &f.collat_asset);
+    assert_eq!(position.collateral_amount, 700);
+}
+
+#[test]
+#[should_panic(expected = "Withdrawal drops health factor below liquidation threshold")]
+fn test_withdraw_rejected_when_correct_price_shows_unsafe_health_factor() {
+    let env = Env::default();
+    let f = setup_two_asset_fixture(&env);
+
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1_000); // $1,500 debt
+
+    // Withdrawing down to 600 units leaves $1,800 * 75% = $1,350 < $1,500 debt: unsafe.
+    f.client.withdraw_collateral(&f.user, &f.collat_asset, &f.borrow_asset, &400);
+}
+
+// A separate fixture using the REAL Oracle contract (dev-dependency), to prove
+// LendingPool inherits Oracle's zero/stale-price rejection rather than
+// silently treating missing/invalid price data as usable.
+
+struct RealOracleFixture {
+    client: LendingPoolClient<'static>,
+    oracle_client: oracle::OracleContractClient<'static>,
+    collat_asset: Address,
+    borrow_asset: Address,
+    user: Address,
+}
+
+fn setup_real_oracle_fixture(env: &Env) -> RealOracleFixture {
+    env.mock_all_auths();
+
+    let pool_id = env.register_contract(None, LendingPool);
+    let client = LendingPoolClient::new(env, &pool_id);
+
+    let interest_admin = Address::generate(env);
+    let interest_id = env.register_contract(None, RealInterestRateModel);
+    let interest_client = interest_rate::InterestRateModelClient::new(env, &interest_id);
+
+    let oracle_admin = Address::generate(env);
+    let oracle_id = env.register_contract(None, oracle::OracleContract);
+    let oracle_client = oracle::OracleContractClient::new(env, &oracle_id);
+    oracle_client.initialize(&oracle_admin);
+
+    let token_admin = Address::generate(env);
+    let collat_asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let borrow_asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+
+    let config_id = env.register_contract(None, FullMockConfig);
+    let config_client = FullMockConfigClient::new(env, &config_id);
+    config_client.setup(
+        &pool_id,
+        &interest_id,
+        &oracle_id,
+        &TEST_LTV,
+        &TEST_LIQ_THRESHOLD,
+        &TEST_BASE_RATE,
+        &TEST_OPTIMAL_UTILIZATION,
+        &TEST_SLOPE1,
+        &TEST_SLOPE2,
+        &TEST_RESERVE_FACTOR,
+    );
+
+    interest_client.initialize(&interest_admin);
+    interest_client.set_config_address(&config_id);
+    client.initialize(&config_id);
+
+    let user = Address::generate(env);
+    token::StellarAssetClient::new(env, &collat_asset).mint(&user, &1_000_000_000i128);
+    token::StellarAssetClient::new(env, &borrow_asset).mint(&user, &1_000_000_000i128);
+
+    RealOracleFixture { client, oracle_client, collat_asset, borrow_asset, user }
+}
+
+#[test]
+#[should_panic(expected = "Price not found for asset")]
+fn test_borrow_blocked_when_collateral_price_missing() {
+    let env = Env::default();
+    let f = setup_real_oracle_fixture(&env);
+
+    f.oracle_client.set_price(&f.borrow_asset, &WAD);
+    // Collateral price was never set - must not silently treat it as any
+    // particular value (e.g. 0 or 1); the borrow must be blocked outright.
+
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1);
+}
+
+#[test]
+#[should_panic(expected = "Oracle price is stale")]
+fn test_borrow_blocked_when_collateral_price_is_stale() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000);
+    let f = setup_real_oracle_fixture(&env);
+
+    f.oracle_client.set_price(&f.collat_asset, &COLLAT_PRICE);
+    f.oracle_client.set_price(&f.borrow_asset, &BORROW_PRICE);
+
+    f.client.deposit_collateral(&f.user, &f.collat_asset, &1_000);
+    f.client.deposit_collateral(&f.user, &f.borrow_asset, &5_000);
+
+    // Let the collateral price go stale before attempting to borrow against it.
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000 + 86_400 + 1);
+    f.client.borrow(&f.user, &f.collat_asset, &f.borrow_asset, &1);
+}

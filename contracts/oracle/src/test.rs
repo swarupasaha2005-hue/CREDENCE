@@ -88,6 +88,96 @@ fn test_unauthorized_price_update() {
 }
 
 #[test]
+#[should_panic(expected = "Price must be positive")]
+fn test_zero_price_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, OracleContract);
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let asset = Address::generate(&env);
+    client.set_price(&asset, &0);
+}
+
+#[test]
+#[should_panic(expected = "Price must be positive")]
+fn test_negative_price_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, OracleContract);
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let asset = Address::generate(&env);
+    client.set_price(&asset, &-100);
+}
+
+#[test]
+fn test_extreme_valid_price_is_handled_safely() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000);
+
+    let contract_id = env.register_contract(None, OracleContract);
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let asset = Address::generate(&env);
+    // An extreme but still well within i128 range price (well under
+    // i128::MAX / WAD, so downstream single multiplications by WAD-scale
+    // amounts remain representable).
+    let extreme_price: i128 = 1_000_000_000_000_000_000_000_000; // $1,000,000 WAD-scaled
+    client.set_price(&asset, &extreme_price);
+
+    assert_eq!(client.get_price(&asset), extreme_price);
+}
+
+#[test]
+#[should_panic(expected = "Oracle price is stale")]
+fn test_stale_price_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000);
+
+    let contract_id = env.register_contract(None, OracleContract);
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let asset = Address::generate(&env);
+    client.set_price(&asset, &1_000_000);
+
+    // Advance well beyond the max age (1 day) without another price update.
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000 + MAX_PRICE_AGE_SECONDS + 1);
+    client.get_price(&asset);
+}
+
+#[test]
+fn test_price_just_under_max_age_is_still_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000);
+
+    let contract_id = env.register_contract(None, OracleContract);
+    let client = OracleContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let asset = Address::generate(&env);
+    client.set_price(&asset, &1_000_000);
+
+    // Right at the boundary (age == MAX_PRICE_AGE_SECONDS) must still pass.
+    env.ledger().with_mut(|li| li.timestamp = 1_000_000 + MAX_PRICE_AGE_SECONDS);
+    assert_eq!(client.get_price(&asset), 1_000_000);
+}
+
+#[test]
 fn test_transfer_admin() {
     let env = Env::default();
     env.mock_all_auths();
