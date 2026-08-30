@@ -421,7 +421,7 @@ All six contracts below are deployed and live on **Stellar Testnet**. Addresses 
 
 The core of the protocol. Holds deposited collateral, tracks each user's supplied and borrowed balances per asset, and enforces that no borrow or withdrawal can push a position below its required collateralization. Debt is tracked as WAD-scaled shares against a global borrow index, so interest accrues without a per-block state write for every borrower.
 
-`CABAA2G6QBAO7R5FYTXFRIOVETIZ7BDU6ZRNYO6XNWAAFIGEV3CFIYVP`
+`CDKTUNWXWOF5WRF3T7PIQFUIV43EUZ2BYDBFKEPDTXGDO6TWNGA3UC35`
 
 </td>
 </tr>
@@ -507,7 +507,7 @@ unauthenticated call rejected).
 
 ### Improvement #2 — Live On-Chain Interest Accrual
 
-**Status: implemented and tested; not yet deployed to the current Testnet `lending_pool`.**
+**Status: implemented, tested, deployed to Testnet.**
 
 The `InterestRateModel`'s utilization/borrow-rate/supply-rate curve was already fully
 implemented and unit-tested, but `LendingPool` never called it after a state change —
@@ -524,11 +524,13 @@ positions never accruing phantom interest) — the lending_pool tests exercise t
 `interest_rate` crate as a dev-dependency, not a hand-rolled stand-in.
 
 > [!NOTE]
-> This fix is committed to this repository and covered by the passing tests below, but the
-> currently deployed Testnet `lending_pool` (see the address in the table above) still only
-> has Improvement #1's code — redeploying it with this fix is a pending follow-up, not yet
-> done. Querying `get_pool_state_view` on the live contract today still returns
-> `current_borrow_rate: 0`; that is expected until it's redeployed, not a bug in this fix.
+> Deployed to the `lending_pool` address in the table above. Verified live: after a real
+> Supply of 100 XLM, `get_pool_state_view` moved from `current_borrow_rate: 0` (the
+> pre-fix default) to `current_borrow_rate: 200` (the configured base rate); after a
+> subsequent Borrow, utilization/borrow rate/supply rate all matched the
+> `InterestRateModel`'s own formulas exactly (`current_utilization: 3000`,
+> `current_borrow_rate: 350`, `current_supply_rate: 94`). The borrow index was also observed
+> to grow across real elapsed Testnet time between transactions.
 
 ### Improvement #3 — Oracle Precision & Price Safety Hardening
 
@@ -926,7 +928,7 @@ claimed as verified.
 | Production deployment (frontend) | **IMPLEMENTED + EVIDENCE AVAILABLE** | Live at [credence-sigma.vercel.app](https://credence-sigma.vercel.app); CI/CD pipeline in [Deployment Pipeline](#-deployment-pipeline) |
 | 6 contracts deployed on Stellar Testnet | **IMPLEMENTED + EVIDENCE AVAILABLE** | Addresses in [Smart Contracts](#-smart-contracts), sourced live from `registry/deployments.json` |
 | Improvement #1 — cross-contract authorization | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 6 passing tests; live on the currently deployed `lending_pool`/`interest_rate_model` |
-| Improvement #2 — live interest accrual | **IMPLEMENTED + TESTED** | 8 passing tests; **not yet deployed** to the current Testnet `lending_pool` (see note above) |
+| Improvement #2 — live interest accrual | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 8 passing tests; live on the currently deployed `lending_pool`, verified with real Supply/Borrow transactions showing `PoolState` rates move off their pre-fix zero defaults |
 | Improvement #3 — oracle safety hardening | **IMPLEMENTED + DEPLOYED + EVIDENCE AVAILABLE** | 16 passing tests; live on the currently deployed `oracle`, verified with real rejected/accepted Testnet transactions |
 | Contract test suite | **EVIDENCE AVAILABLE** | 50/50 passing across all 6 contracts — see [Contract Test Coverage](#-contract-test-coverage) |
 | Scripted Testnet wallet verification | **EVIDENCE AVAILABLE** | 55 unique scripted wallets, 134/134 successful transactions — see [Testnet User Verification](#-testnet-user-verification). **Not evidence of human user adoption** — these are automated verification accounts, not people. |
