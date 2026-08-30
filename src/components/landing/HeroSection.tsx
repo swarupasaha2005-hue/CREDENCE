@@ -3,6 +3,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '../ui/button';
 import Image from 'next/image';
+import Link from 'next/link';
 
 const HeroSection = () => {
   return (
@@ -47,13 +48,10 @@ const HeroSection = () => {
             Credence is a decentralized liquidity protocol built on Stellar Soroban. Supply your assets, borrow with ease and earn sustainable yield.
           </p>
           
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 w-full px-6 md:px-0">
-            <Button size="lg" className="h-[52px] md:h-14 px-10 text-[15px] font-medium bg-[#FAFAFA] text-[#050505] hover:bg-[#FAFAFA]/90 w-full max-w-[280px] sm:max-w-none sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]">
-              Launch App
-            </Button>
-            <Button variant="outline" size="lg" className="h-[52px] md:h-14 px-10 text-[15px] font-medium bg-transparent border-[rgba(250,250,250,.15)] text-[#FAFAFA] hover:bg-[rgba(250,250,250,.05)] w-full max-w-[280px] sm:max-w-none sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]">
-              Explore Markets
+          {/* CTA */}
+          <div className="flex items-center justify-center w-full px-6 md:px-0">
+            <Button asChild size="lg" className="h-[52px] md:h-14 px-10 text-[15px] font-medium bg-[#FAFAFA] text-[#050505] hover:bg-[#FAFAFA]/90 w-full max-w-[280px] sm:max-w-none sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]">
+              <Link href="/dashboard">Launch App</Link>
             </Button>
           </div>
         </motion.div>

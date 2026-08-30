@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { SupplyAsset, SupplyPosition } from "../../../packages/interfaces/src";
-import { useStellar } from "../../context/StellarContext";
-import { PositionsTable } from "../../components/earn/PositionsTable";
-import { SupplyModal, SupplyModalMode, SupplyModalTarget } from "../../components/earn/SupplyModal";
-import { SupplySummary } from "../../components/earn/SupplySummary";
-import { SupplyTable } from "../../components/earn/SupplyTable";
-import { useSupplyAssets, useSupplyPositions } from "../../hooks/useSupply";
+import { SupplyAsset, SupplyPosition } from "../../../../packages/interfaces/src";
+import { useStellar } from "../../../context/StellarContext";
+import { PositionsTable } from "../../../components/earn/PositionsTable";
+import { SupplyModal, SupplyModalMode, SupplyModalTarget } from "../../../components/earn/SupplyModal";
+import { SupplySummary } from "../../../components/earn/SupplySummary";
+import { SupplyTable } from "../../../components/earn/SupplyTable";
+import { useSupplyAssets, useSupplyPositions } from "../../../hooks/useSupply";
 
 export default function EarnPage() {
   const { address } = useStellar();

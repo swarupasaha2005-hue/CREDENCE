@@ -1,19 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MarketData } from "../../../packages/interfaces/src";
-import { useStellar } from "../../context/StellarContext";
-import { MarketAction } from "../../components/markets/ActionButtons";
-import { MarketFilters, MarketFilter, MarketSort } from "../../components/markets/MarketFilters";
-import { MarketSearch } from "../../components/markets/MarketSearch";
-import { MarketStats } from "../../components/markets/MarketStats";
-import { MarketsTable } from "../../components/markets/MarketsTable";
-import { ProtocolSummaryBar } from "../../components/markets/ProtocolSummaryBar";
-import { SupplyModal, SupplyModalMode, SupplyModalTarget } from "../../components/earn/SupplyModal";
-import { BorrowModal } from "../../components/borrow/BorrowModal";
-import { useMarkets } from "../../hooks/useMarkets";
-import { useSupplyAssets } from "../../hooks/useSupply";
-import { useBorrowableAssets, useBorrowSnapshot } from "../../hooks/useBorrow";
+import { MarketData } from "../../../../packages/interfaces/src";
+import { useStellar } from "../../../context/StellarContext";
+import { MarketAction } from "../../../components/markets/ActionButtons";
+import { MarketFilters, MarketFilter, MarketSort } from "../../../components/markets/MarketFilters";
+import { MarketSearch } from "../../../components/markets/MarketSearch";
+import { MarketStats } from "../../../components/markets/MarketStats";
+import { MarketsTable } from "../../../components/markets/MarketsTable";
+import { ProtocolSummaryBar } from "../../../components/markets/ProtocolSummaryBar";
+import { SupplyModal, SupplyModalMode, SupplyModalTarget } from "../../../components/earn/SupplyModal";
+import { BorrowModal } from "../../../components/borrow/BorrowModal";
+import { useMarkets } from "../../../hooks/useMarkets";
+import { useSupplyAssets } from "../../../hooks/useSupply";
+import { useBorrowableAssets, useBorrowSnapshot } from "../../../hooks/useBorrow";
 
 function sortMarkets(markets: MarketData[], sort: MarketSort): MarketData[] {
   const sorted = [...markets];

@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { BorrowableAsset, BorrowPosition } from "../../../packages/interfaces/src";
-import { useStellar } from "../../context/StellarContext";
-import { BorrowModal } from "../../components/borrow/BorrowModal";
-import { BorrowPositionsTable } from "../../components/borrow/BorrowPositionsTable";
-import { BorrowSummary } from "../../components/borrow/BorrowSummary";
-import { BorrowTable } from "../../components/borrow/BorrowTable";
-import { RepayModal } from "../../components/borrow/RepayModal";
-import { RiskBanner } from "../../components/borrow/RiskBanner";
-import { useBorrowableAssets, useBorrowPositions, useBorrowSnapshot } from "../../hooks/useBorrow";
+import { BorrowableAsset, BorrowPosition } from "../../../../packages/interfaces/src";
+import { useStellar } from "../../../context/StellarContext";
+import { BorrowModal } from "../../../components/borrow/BorrowModal";
+import { BorrowPositionsTable } from "../../../components/borrow/BorrowPositionsTable";
+import { BorrowSummary } from "../../../components/borrow/BorrowSummary";
+import { BorrowTable } from "../../../components/borrow/BorrowTable";
+import { RepayModal } from "../../../components/borrow/RepayModal";
+import { RiskBanner } from "../../../components/borrow/RiskBanner";
+import { useBorrowableAssets, useBorrowPositions, useBorrowSnapshot } from "../../../hooks/useBorrow";
 
 export default function BorrowPage() {
   const { address } = useStellar();

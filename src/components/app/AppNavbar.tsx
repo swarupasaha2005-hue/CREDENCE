@@ -1,12 +1,23 @@
 "use client"
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Copy, RefreshCw, LogOut } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Button } from '../ui/button';
+import { Activity, X, Copy, RefreshCw, LogOut } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { WalletSelectorModal } from '../wallet/WalletSelectorModal';
 
-const Navbar = () => {
+const NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Markets", href: "/markets" },
+  { label: "Earn", href: "/earn" },
+  { label: "Borrow", href: "/borrow" },
+];
+
+const AppNavbar = () => {
+  const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
   const [isWalletSelectorOpen, setIsWalletSelectorOpen] = useState(false);
   const walletMenuRef = useRef<HTMLDivElement>(null);
@@ -56,7 +67,8 @@ const Navbar = () => {
 
   return (
     <nav aria-label="Main Navigation" className="fixed top-0 left-0 right-0 z-50 bg-[#050505] h-[88px]">
-      <div className="h-full px-6 md:px-8 lg:px-[48px] grid grid-cols-2 items-center">
+      {/* 3-column Grid Layout for Desktop, 2-column for Mobile */}
+      <div className="h-full px-6 md:px-8 lg:px-[48px] grid grid-cols-2 md:grid-cols-[1.9fr_auto_1fr] items-center">
         
         {/* Left Column - Branding */}
         <div className="flex items-center justify-start">
@@ -90,6 +102,31 @@ const Navbar = () => {
               Credence
             </span>
           </Link>
+        </div>
+
+        {/* Center Column - Navigation */}
+        <div className="hidden md:flex items-center justify-center gap-[24px] lg:gap-[48px]">
+          {NAV_ITEMS.map(({ label, href }) => {
+            const isActive = pathname === href || pathname?.startsWith(`${href}/`);
+
+            return (
+              <Link
+                key={label}
+                href={href}
+                className={`group relative text-sm font-medium py-1.5 transition-colors duration-[250ms] ease-out rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] ${
+                  isActive ? "text-[#E88DAF]" : "text-white/75 hover:text-[#E88DAF]"
+                }`}
+              >
+                {label}
+                {/* Animated Underline (2px center-out) */}
+                <span
+                  className={`absolute bottom-0 left-1/2 h-[2px] bg-[#E88DAF] rounded-full -translate-x-1/2 transition-all duration-[250ms] ease-out ${
+                    isActive ? "w-full" : "w-0 group-hover:w-full"
+                  }`}
+                />
+              </Link>
+            );
+          })}
         </div>
 
         {/* Right Column - Actions */}
@@ -165,12 +202,48 @@ const Navbar = () => {
               </div>
             )}
           </div>
+
+          {/* Mobile menu button */}
+          <div className="md:hidden flex items-center justify-end ml-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-11 h-11"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Activity className="w-6 h-6 text-white" />}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile menu panel */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden px-6 pt-4 pb-2 flex flex-col gap-4 border-t border-white/[0.06] bg-[#050505]">
+          {NAV_ITEMS.map(({ label, href }) => {
+            const isActive = pathname === href || pathname?.startsWith(`${href}/`);
+
+            return (
+              <Link
+                key={label}
+                href={href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`text-sm font-medium py-2 transition-colors duration-[250ms] ease-out rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E88DAF] ${
+                  isActive ? "text-[#E88DAF]" : "text-white/75 hover:text-[#E88DAF]"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       <WalletSelectorModal open={isWalletSelectorOpen} onClose={() => setIsWalletSelectorOpen(false)} />
     </nav>
   );
 };
 
-export default Navbar;
+export default AppNavbar;
