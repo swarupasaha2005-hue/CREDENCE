@@ -1,11 +1,19 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contract, contractclient, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+
+// --- Cross-Contract Interfaces ---
+
+#[contractclient(name = "ConfigClient")]
+pub trait ConfigInterface {
+    fn get_lending_pool(env: Env) -> Address;
+}
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    ConfigAddress,
     BorrowIndex(Address), // Maps asset Address to index value (1e18 WAD)
     LastUpdated(Address), // Maps asset Address to timestamp
 }
@@ -33,6 +41,15 @@ impl InterestRateModel {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.events().publish((symbol_short!("init"),), admin);
+    }
+
+    /// Wires up the Configuration contract so `update_borrow_index` can resolve
+    /// and authorize the registered Lending Pool. Admin-gated and re-settable,
+    /// matching the other protocol contracts' address-wiring setters.
+    pub fn set_config_address(env: Env, config_address: Address) {
+        check_admin(&env);
+        env.storage().instance().set(&DataKey::ConfigAddress, &config_address);
+        env.events().publish((Symbol::new(&env, "set_config"),), config_address);
     }
 
     /// Calculates the pool utilization rate in BPS (10000 = 100%).
@@ -84,11 +101,21 @@ impl InterestRateModel {
     }
 
     /// Updates the global borrow index for a specific asset based on elapsed time and current borrow APR.
-    /// Only the Lending Pool (or Admin) should be authorized to call this during state transitions.
+    /// Only the registered Lending Pool contract may call this during state transitions.
     pub fn update_borrow_index(env: Env, asset: Address, borrow_rate: i128) {
-        // Ideally, check_auth here for the lending pool. But for MVP, keeping open or checking admin.
-        // In a production setup, the lending pool contract would be authenticated.
-        
+        // Resolve the registered Lending Pool from Configuration and require its
+        // authorization. Soroban auto-authorizes a contract address when that
+        // contract is the direct invoker, so this succeeds only when the real
+        // Lending Pool contract makes this call - no signature or hardcoded
+        // address involved.
+        let config_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConfigAddress)
+            .expect("Config address not set");
+        let config = ConfigClient::new(&env, &config_addr);
+        config.get_lending_pool().require_auth();
+
         let mut index = Self::get_borrow_index(env.clone(), asset.clone());
         let last_updated = env.storage().persistent().get(&DataKey::LastUpdated(asset.clone())).unwrap_or(0u64);
         let current_time = env.ledger().timestamp();

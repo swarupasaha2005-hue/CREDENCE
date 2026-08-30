@@ -18,6 +18,7 @@ pub enum DataKey {
     Oracle,
     LendingPool,
     InterestModel,
+    LiquidationEngine,
 }
 
 #[contract]
@@ -157,6 +158,16 @@ impl ConfigurationContract {
 
     pub fn get_interest_model(env: Env) -> Address {
         env.storage().instance().get(&DataKey::InterestModel).expect("Interest model not set")
+    }
+
+    pub fn set_liquidation_engine(env: Env, engine: Address) {
+        check_admin(&env);
+        env.storage().instance().set(&DataKey::LiquidationEngine, &engine);
+        env.events().publish((Symbol::new(&env, "set_liq_eng"),), engine);
+    }
+
+    pub fn get_liquidation_engine(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::LiquidationEngine).expect("Liquidation engine not set")
     }
 
     // Aliases matching the ConfigInterface trait names expected by

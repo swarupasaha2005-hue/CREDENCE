@@ -10,6 +10,7 @@ pub trait ConfigInterface {
     fn get_liq_threshold(env: Env) -> u32;
     fn get_oracle(env: Env) -> Address;
     fn get_interest_model(env: Env) -> Address;
+    fn get_liquidation_engine(env: Env) -> Address;
 }
 
 #[contractclient(name = "OracleClient")]
@@ -332,6 +333,8 @@ impl LendingPool {
     /// Called by the Liquidation Engine to burn a borrower's debt and seize collateral.
     /// The liquidator's repayment tokens must already have been transferred to this pool
     /// (the Liquidation Engine does this before invoking this function).
+    /// Only the registered Liquidation Engine may call this - it is the sole
+    /// gateway into this low-level accounting path.
     pub fn execute_liquidation_burn(
         env: Env,
         borrower: Address,
@@ -343,6 +346,13 @@ impl LendingPool {
     ) {
         let config_addr: Address = env.storage().instance().get(&DataKey::ConfigAddress).unwrap();
         let config = ConfigClient::new(&env, &config_addr);
+
+        // Resolve the registered Liquidation Engine and require its authorization.
+        // Soroban auto-authorizes a contract address when that contract is the
+        // direct invoker, so this succeeds only when the real Liquidation Engine
+        // makes this call - no signature or hardcoded address involved.
+        config.get_liquidation_engine().require_auth();
+
         let interest_model = InterestModelClient::new(&env, &config.get_interest_model());
 
         // 1. Reduce borrower's scaled debt
